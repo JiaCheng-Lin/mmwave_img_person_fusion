@@ -2,3 +2,5 @@ python demo_track.py video --fp16 --fuse --save_result
 
 
 python demo_track.py webcam --camid 0 --fp16 --fuse --save_result
+
+python mmwave_main.py webcam --camid 0 --fp16 --fuse
