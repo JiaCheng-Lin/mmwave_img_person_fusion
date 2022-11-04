@@ -23,7 +23,7 @@ def process_json_data(data): # data: mmwave json
                           round(data["JsonTargetList"][i]["Px"]-origin_px, 5),\
                           round(data["JsonTargetList"][i]["Py"]-origin_py, 5) # minus the origin_x & y
         # print("real:", px, py)
-        xy_list.append([px, py, ID])
+        xy_list.append([px, py, ID, (0, 0, 0)]) # original pt: blue color 
     return xy_list
 
 # # generate a coordinate background for pts visualization.
@@ -80,7 +80,6 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
     # start = datetime.now() ### time
 
     if len(xy_list) == 0 and data: # data(json file) exists.
-        print(xy_list)
         # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
         xy_list = process_json_data(data) # [[px, py, ID], ... ], px, py: ... meter
         # print(xy_list)
@@ -89,9 +88,9 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
     origin_pt = np.array((w//2, 30))
     gap = 60 # default pts dis: 60 pixels/meter
 
-    for px, py, ID in xy_list:
+    for px, py, ID, pt_color in xy_list:
         bg_pt = (origin_pt + (px*gap, py*gap)).astype(int)
-        cv2.circle(bg, bg_pt, 4, (255, 100, 0), -1)
+        cv2.circle(bg, bg_pt, 4, pt_color, -1) # use the distinguish color from xy_list[3]
         
         dis = round(np.sqrt(px**2+py**2), 3)
         info = str(ID)+" ("+str(px)+", "+str(py)+") "+str(dis)

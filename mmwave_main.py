@@ -25,6 +25,14 @@ from mmwave_utils.mmwave_pts_visualization import *
 import copy
 """mmwave""" 
 
+## for regression model prediction. (mmwave pt project to image)
+from joblib import dump, load # save and load model.
+from sklearn.model_selection import train_test_split # split data to train&test
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, RANSACRegressor
+from sklearn.preprocessing import PolynomialFeatures # Polynomial
+from sklearn.pipeline import make_pipeline
+
+
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
 
@@ -72,7 +80,7 @@ def make_parser():
     parser.add_argument("--conf", default=None, type=float, help="test conf")
     parser.add_argument("--nms", default=None, type=float, help="test nms threshold")
     parser.add_argument("--tsize", default=None, type=int, help="test img size")
-    parser.add_argument("--fps", default=30, type=int, help="frame rate (fps)")
+    parser.add_argument("--fps", default=10, type=int, help="frame rate (fps)")
     parser.add_argument(
         "--fp16",
         dest="fp16",
@@ -302,6 +310,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # # read mmwave background image
     bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
     
+    # # regression model initialization (mmwave pts project to img)
+    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2022_11_02_20_07_45.joblib') 
+    
     while True:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -352,21 +363,25 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             # print("online_tlwhs", online_tlwhs)
             """!!! mmwave process !!!"""
             if frame_id != 0 :
-
+                # print("frame_id", frame_id)
                 """ draw mmwave pts """  # spend 0.001s
                 bg_copy = copy.deepcopy(bg)
                 mmwave_pt_visual = draw_mmwave_pts(bg_copy, mmwave_json)
                 cv2.imshow("mmwave", mmwave_pt_visual)
                 """ draw mmwave pts """
 
-                # xy_list: [[px, py, real_dis, ID], ]
-                online_im, uv_list = process_mmwave(mmwave_json, online_im, origin_px=6.0, origin_py=1.0)
+                """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
+                # start = datetime.now()
+                online_im, estimated_uv_list = process_mmwave(mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+                # end = datetime.now()  
+                # print("Transform time", (end-start).total_seconds()) # about 1ms.
+
                 """ cal error: find the corresponding person """
                 ### px, py, real_dis, ID_mmwave <=> center_u, center_v, esti_dis, ID_img (xy_list <=> center_pt_list)
                 center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
                 
                 # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
-                online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(uv_list, center_pt_list, online_im, previous_ID_matches)
+                online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(estimated_uv_list, center_pt_list, online_im, previous_ID_matches)
 
                 ### after match, show a new mmwave_pt_visual
                 new_bg_copy = copy.deepcopy(bg)

@@ -8,6 +8,13 @@ import math
 import lap # ref: https://github.com/gatagat/lap
 # # lap.lapjv -> Jonker-Volgenant algorithm, faster than Hungarian Algorithm
 
+## for regression model prediction. (mmwave pt project to image)
+from joblib import dump, load # save and load model.
+from sklearn.model_selection import train_test_split # split data to train&test
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, RANSACRegressor
+from sklearn.preprocessing import PolynomialFeatures # Polynomial
+from sklearn.pipeline import make_pipeline
+
 # Connect to the mmwave server and get data
 def get_mmwave_data(frame_idx): 
     ### mmwave parameters ###
@@ -34,7 +41,7 @@ def cal_time_error(now_time, mmwave_json):
     mmwave_time = datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time() # no date, so just convert to ".time()" format
     dT_mm = datetime.combine(datetime.today(), mmwave_time) # combine the date 
     dT_now = datetime.combine(datetime.today(), current_time) # combine the date 
-    time_error =  np.abs((dT_now - dT_mm).total_seconds()) #current_time-mmwave_time  # 0.015 second -> 15ms
+    time_error =  np.abs((dT_now - dT_mm).total_seconds()) # current_time-mmwave_time  # 0.015 second -> 15ms
     print("Time Error:", time_error, "sec ", current_time, mmwave_time)
     
     return time_error
@@ -52,29 +59,73 @@ def mmwave_data_process(frame_idx, mmwave_json):
     time_error = cal_time_error(now_img_time, mmwave_json) # compare with image time(now time)
     
     return time_error, mmwave_json
-    
+
+def pts_val_limit(x, y, w, h):
+    x = -10 if x < 0 else x
+    x = w+10 if x >= w else x
+    y = -10 if y < 0 else y
+    y = h+10 if y >= h else y
+
+    return x, y
+
 # project the mmwave pt(s) to image using transform "T"
-def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0): # # origin_px/py: jorjin Device original point 
-    T = np.array([[298.3232162910885, -5.776874682271578, 296.5718869465865], 
-                 [-0.47510099657455684, -11.295472784043396, 309.37445188343264], 
-                 [-3.831570477563773e-15, 2.8408265323465187e-15, 0.9999999999999895]])
+def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=None): # # origin_px/py: jorjin Device original point 
+    T = np.array([[-195.31193858179913, -14.788842727741137, 394.1668414663909], [-8.061606906490365, -62.775675859828034, 539.473064686669], [-3.0531133177191805e-16, -3.885780586188048e-16, 1.000000000000001]])
+    
+    # # # Done: model initialization in mmwave_main file
+    # regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2022_11_02_20_07_45.joblib') 
 
     xy_list = [] # px, py, real_dis list in single frame
     detection = int(mmwave_json["Detection"]) # # number of person
     for i in range(detection): 
         # px = px*-1 <= flip horizontally because jorjinMMWave device app "display" part
         ID, px, py = mmwave_json["JsonTargetList"][i]["ID"], \
-                    round(mmwave_json["JsonTargetList"][i]["Px"]-origin_px, 5)*-1, \
+                    round(mmwave_json["JsonTargetList"][i]["Px"]-origin_px, 5), \
                     round(mmwave_json["JsonTargetList"][i]["Py"]-origin_py, 5) # minus the origin_x & y
         corresponding_uv = np.matmul(T,  np.array([px, py, 1]))
         corresponding_u, corresponding_v = int(corresponding_uv[0]/corresponding_uv[2]), int(corresponding_uv[1]/corresponding_uv[2])
-        cv2.circle(im0, (corresponding_u, corresponding_v), 2, (255, 255, 0), 5)
         
+        ### predict by sklearn, polynominal regression
+        reg_uv = regressor.predict(np.array([[px, py]]))
+        reg_u, reg_v = int(reg_uv[0][0]), int(reg_uv[0][1])
+        # print("transform", corresponding_u, corresponding_v)
+        # print("regression", reg_u, reg_v)
+
+        # # Done: pts_val_limit, avoid pts(u, v) value too large or small to "cv2.circle" error.
+        # w, h, _ = im0.shape
+        # reg_u, reg_v = pts_val_limit(reg_u, reg_v, w, h)
+        # corresponding_u, corresponding_v = pts_val_limit(corresponding_u, corresponding_v, w, h)
+
+        # # vis: draw the pts to image
+        cv2.circle(im0, (corresponding_u, corresponding_v), 2, (0, 89, 255), 5)
+        cv2.circle(im0, (reg_u, reg_v), 2, (255, 255, 0), 5)
+        
+        # # vis: show the "mmwave dis" at the estimated uv pos in img
         real_dis = round(np.sqrt(px**2+py**2), 5)
-        cv2.putText(im0, str(real_dis), (int(corresponding_uv[0]), int(corresponding_uv[1])-10), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+        cv2.putText(im0, str(real_dis), (reg_u, reg_v-10), cv2.FONT_HERSHEY_COMPLEX_SMALL,
             0.8, (255, 255, 0), 1, cv2.LINE_AA)
 
-        xy_list.append([corresponding_u, corresponding_v, real_dis, ID, px*-1, py]) # px*-1: because of new visualize mmwave pt (see mmwave_)pts_visualization.py
+        xy_list.append([reg_u, reg_v, real_dis, ID, px, py])
+
+    ### original 
+    # T = np.array([[-203.86088488354136, -19.672907486368345, 440.310396096428], [-3.1604213069951346, -70.84393142336387, 555.8573367228084], [-3.6991243401729434e-14, -7.563394355258879e-16, 1.0000000000000047]])
+    # T = np.array([[-195.31193858179913, -14.788842727741137, 394.1668414663909], [-8.061606906490365, -62.775675859828034, 539.473064686669], [-3.0531133177191805e-16, -3.885780586188048e-16, 1.000000000000001]])
+    # xy_list = [] # px, py, real_dis list in single frame
+    # detection = int(mmwave_json["Detection"]) # # number of person
+    # for i in range(detection): 
+    #     # px = px*-1 <= flip horizontally because jorjinMMWave device app "display" part
+    #     ID, px, py = mmwave_json["JsonTargetList"][i]["ID"], \
+    #                 round(mmwave_json["JsonTargetList"][i]["Px"]-origin_px, 5), \
+    #                 round(mmwave_json["JsonTargetList"][i]["Py"]-origin_py, 5) # minus the origin_x & y
+    #     corresponding_uv = np.matmul(T,  np.array([px, py, 1]))
+    #     corresponding_u, corresponding_v = int(corresponding_uv[0]/corresponding_uv[2]), int(corresponding_uv[1]/corresponding_uv[2])
+    #     cv2.circle(im0, (corresponding_u, corresponding_v), 2, (255, 255, 0), 5)
+        
+    #     real_dis = round(np.sqrt(px**2+py**2), 5)
+    #     cv2.putText(im0, str(real_dis), (int(corresponding_uv[0]), int(corresponding_uv[1])-10), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+    #         0.8, (255, 255, 0), 1, cv2.LINE_AA)
+
+    #     xy_list.append([corresponding_u, corresponding_v, real_dis, ID, px, py])
     
     return im0, xy_list
 
@@ -89,7 +140,7 @@ def mmwavePts_within_bbox(px, py, tlwh):
     # print("False")
     return False
 
-def getErrorMatrix(xy_list, center_pt_list):
+def getErrorMatrix(xy_list, center_pt_list, error_threshold=200):
     # mmwave compare to image
     error_matrix = [] # two pairs of lists "error array"
     for xy_dis in xy_list: # mmwave
@@ -99,10 +150,11 @@ def getErrorMatrix(xy_list, center_pt_list):
         for uv_dis in center_pt_list: # img center pts
             # print("uv_dis", uv_dis)
             u, v, fake_dis, ID_img, tlwh = uv_dis
-            if not mmwavePts_within_bbox(px, py, tlwh): # # return "True" if mmwave pt within bbox
+            error = math.sqrt((px-u)**2+(py-v)**2+((real_dis-fake_dis)*100)**2)
+            # print("pts error", error)
+            if not mmwavePts_within_bbox(px, py, tlwh) or error > error_threshold: # # return "True" if mmwave pt within bbox
                 row_error_matrix.append(100000.0) # not match, the pt out of bbox
                 continue
-            error = math.sqrt((px-u)**2+(py-v)**2+((real_dis-fake_dis)*100)**2)
             # print("real_dis-fake_dis", real_dis-fake_dis)
             row_error_matrix.append(error)
         error_matrix.append(row_error_matrix)
@@ -110,7 +162,7 @@ def getErrorMatrix(xy_list, center_pt_list):
     return error_matrix # # row: mmwave, col: img(camera)
 
 # # linear_assignment problem: Jonker-Volgenant algorithm, faster than Hungarian Algorithm
-def linear_assignment(cost_matrix, thresh=100000.0): # thresh=1000.0: pt out of bbox, not match
+def linear_assignment(cost_matrix, thresh=10000.0): # thresh=1000.0: pt out of bbox, not match
     if cost_matrix.size == 0: # check whether the np.array is empty 
         return [], [], []
     matches, unmatched_a, unmatched_b = [], [], []
@@ -129,35 +181,38 @@ def linear_assignment(cost_matrix, thresh=100000.0): # thresh=1000.0: pt out of 
 # # center_pt_list: img list, [center_pt_x, center_pt_y, fake_dis, ID, tlwh]
 def pt_match(xy_list, center_pt_list, im0, previous_ID_matches= []):
     ## get error matrix between xy_list(mmwave) and center_pt_list(camera)
-    error_matrix = getErrorMatrix(xy_list, center_pt_list)
-    print(error_matrix)
+    error_matrix = getErrorMatrix(xy_list, center_pt_list, error_threshold=150)
+    # print(error_matrix)
 
     # # linear_assignment problem, match the N x M matrix, ref: https://github.com/gatagat/lap
     # # get the minimum sum of weight, using lap.lapjv to solve it.
     matches, unmatched_mmwave, unmatched_img = linear_assignment(np.array(error_matrix))
-    print("matches", matches) # idx matches
-    print("unmatched_mmwave", unmatched_mmwave)
-    print("unmatched_img", unmatched_img)
+    # print("matches", matches) # idx matches
+    # print("unmatched_mmwave", unmatched_mmwave)
+    # print("unmatched_img", unmatched_img)
 
-    # # for matched pts
+    """ for Matched pts""" # the best situation
     new_mmwave_pts_list = []
     ID_matches = []
     for i, j in matches:
+        # print("real_dis, fake_dis, diff",xy_list[i][2], center_pt_list[j][2], xy_list[i][2]-center_pt_list[j][2])
+
         ID_img = int(center_pt_list[j][3])
         l, t, _, _ = map(int, center_pt_list[j][4]) # map all para to int type
         _, _, real_dis, ID_mmwave, px, py = xy_list[i]
         
         cv2.putText(im0, "mmW "+str(real_dis), (l, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
 
-        new_mmwave_pts_list.append([px, py, ID_mmwave])
+        new_mmwave_pts_list.append([px, py, ID_mmwave, (232, 229, 26)]) # give green color for vis to distinguish
         ID_matches.append([ID_mmwave, ID_img, px, py]) # save for previous ID matches
 
-    print("ID_matches", ID_matches)
+    # print("ID_matches", ID_matches)
     
-    print("previous_ID_matches", previous_ID_matches)
+    # print("previous_ID_matches", previous_ID_matches)
 
-    """main problem: person stopped"""
-    # # solve the person stopped problem, mmwave pt will disappear.
+
+    """ unmatched problem: "Person Stopped", mmwave pt will disappear
+         person in img and exists previous pos.""" 
     # # process the unmatched img person but matched before 
 
     # one/more person with no mmwave pos. (no mmwave data to match, so unmatch_img will be empty)
@@ -166,12 +221,13 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches= []):
     if len(unmatched_img)!=0: # unmatched_img idx
         for ID_mmwave, ID_img, px, py in previous_ID_matches:
             unmatched_img_ID = np.array(center_pt_list, dtype=object)[unmatched_img][:, 3]
-            print("ID_img", ID_img)
-            print("unmatched_img_ID", unmatched_img_ID)
+            # print("ID_img", ID_img)
+            # print("unmatched_img_ID", unmatched_img_ID)
             if ID_img in unmatched_img_ID:
-                print("find!!!!!!!!!!!!!!")
+                # print("find!!!!!!!!!!!!!!")
                 ID_matches.append([ID_mmwave, ID_img, px, py]) # add to previous matches, record
-                new_mmwave_pts_list.append([px, py, ID_mmwave]) # add to mmwave visualization
+                new_mmwave_pts_list.append([px, py, ID_mmwave, (0, 143, 255)]) # add to mmwave visualization
+                # give orange color for vis to distinguish
 
                 # # if find the previous ID matched, 
                 # # so need to "delete" corresponding idx from "unmatched_mmwave"
@@ -180,7 +236,7 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches= []):
                         unmatched_mmwave = np.delete(unmatched_mmwave, i)
                         break
 
-    """main problem: camera can not capture person"""
+    """camera can not capture person, but mmwave has pts""" # use mmwave original pt, just show it 
     # # solve the person out of view (camera can not capture, but mmwave can)
     if len(xy_list) != 0 and len(center_pt_list)==0:  # # no person 
         unmatched_mmwave = [i for i in range(len(xy_list))]
@@ -188,10 +244,12 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches= []):
     if len(unmatched_mmwave)!=0: # unmatched_mmwave idx
         for idx in unmatched_mmwave:
             _, _, real_dis, ID_mmwave, px, py = xy_list[idx]
-            new_mmwave_pts_list.append([px, py, ID_mmwave])  # add to mmwave visualization
+            new_mmwave_pts_list.append([px, py, ID_mmwave, (0, 0, 0)])  # add to mmwave visualization
+            # give black color for vis to distinguish
     
-    
-    print("new_mmwave_pts_list", new_mmwave_pts_list)
+    # print("new_mmwave_pts_list", new_mmwave_pts_list)
+
+
 
     # ### Abandon..., old match version
     # pt_relation = []
