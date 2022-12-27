@@ -265,7 +265,8 @@ def get_center_pt_list(online_im, online_ids, online_tlwhs):
     center_pt_list = [] # [[centerPt_u, centerPt_v, fake_dis, ID_img], ]
     for idx, tlwh in enumerate(online_tlwhs):
         center_pt_x, center_pt_y = int(tlwh[0]+tlwh[2]/2), int(tlwh[1]+tlwh[3]/2)
-        cv2.circle(online_im, (center_pt_x, center_pt_y), 2, (0, 0, 255), 5)
+        bottom_pt = int(tlwh[1]+tlwh[3])-20
+        cv2.circle(online_im, (center_pt_x, bottom_pt), 2, (0, 0, 255), 5)
 
         """  estimate fake distance using bbox  """ # reference: (github) Yolov4-Detector-and-Distance-Estimator
         focal_person = 1035 # pixels, calculation see main_BT.py file
@@ -274,7 +275,7 @@ def get_center_pt_list(online_im, online_ids, online_tlwhs):
         fake_dis = round(fake_dis*0.0254, 2) # inch -> meter
         cv2.putText(online_im, "cam "+str(fake_dis), (center_pt_x, center_pt_y-50), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 255, 0), 1, cv2.LINE_AA)
         # add to list
-        center_pt_list.append([center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh])
+        center_pt_list.append([center_pt_x, bottom_pt, fake_dis, online_ids[idx], tlwh])
 
     return center_pt_list, online_im
 
@@ -311,14 +312,13 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
     
     # # regression model initialization (mmwave pts project to img)
-    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2022_11_02_20_07_45.joblib') 
+    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2022_12_08_11_42_16.joblib') 
     
     while True:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
         # cv2.imshow('frame', frame)
-        
         
         """get mmwave data"""
         if frame_id != 0 : # reason: (initializing img model)Let the image be processed a frame. Otherwise, the time error will be very large 

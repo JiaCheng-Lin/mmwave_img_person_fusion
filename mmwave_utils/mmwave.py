@@ -70,14 +70,16 @@ def pts_val_limit(x, y, w, h):
 
 # project the mmwave pt(s) to image using transform "T"
 def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=None): # # origin_px/py: jorjin Device original point 
-    T = np.array([[-195.31193858179913, -14.788842727741137, 394.1668414663909], [-8.061606906490365, -62.775675859828034, 539.473064686669], [-3.0531133177191805e-16, -3.885780586188048e-16, 1.000000000000001]])
+    T = np.array([[-168.79149551693234, 0.0724572081552246, 297.4314052813067], [-18.799447344663356, -97.81708310532088, 789.829879489633], [4.85722573273506e-17, -1.249000902703301e-16, 1.0000000000000013]])
     
     # # # Done: model initialization in mmwave_main file
-    # regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2022_11_02_20_07_45.joblib') 
-
+    
     xy_list = [] # px, py, real_dis list in single frame
     detection = int(mmwave_json["Detection"]) # # number of person
     for i in range(detection): 
+
+        print("Vx, Vy: ", mmwave_json["JsonTargetList"][i]["Vx"], mmwave_json["JsonTargetList"][i]["Vy"])
+
         # px = px*-1 <= flip horizontally because jorjinMMWave device app "display" part
         ID, px, py = mmwave_json["JsonTargetList"][i]["ID"], \
                     round(mmwave_json["JsonTargetList"][i]["Px"]-origin_px, 5), \
@@ -86,8 +88,29 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
         corresponding_u, corresponding_v = int(corresponding_uv[0]/corresponding_uv[2]), int(corresponding_uv[1]/corresponding_uv[2])
         
         ### predict by sklearn, polynominal regression
-        reg_uv = regressor.predict(np.array([[px, py]]))
+        reg_uv = regressor.predict(np.array([[px, py]])) # origin 
         reg_u, reg_v = int(reg_uv[0][0]), int(reg_uv[0][1])
+
+        ### RA regressor
+        '''
+        # regressor_RA = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/RA_data_2022_12_08_11_42_16.joblib') 
+        dist = np.linalg.norm((px, py)) # l2 norm
+        deg = 90-np.arctan2(py, px)*180.0/np.pi
+        reg_uv_RA = regressor_RA.predict(np.array([[dist, deg]])) # use RA(range, angle) as input
+        reg_u_RA, reg_v_RA = int(reg_uv_RA[0][0]), int(reg_uv_RA[0][1])
+        '''
+
+        ### convert by intrinsic parameters
+        camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
+        mtx = np.array(camera_params['K'])
+        dist = np.array(camera_params['dist'])
+        points_2d = cv2.projectPoints(np.array([-px, -0.5, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
+        # print(tuple(points_2d.flatten()))
+        a = points_2d.flatten()
+        print(a)
+        cv2.circle(im0, (int(a[0]), int(a[1])), 2, (0,255,255), 5) # 
+
+        
         # print("transform", corresponding_u, corresponding_v)
         # print("regression", reg_u, reg_v)
 
@@ -97,8 +120,9 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
         # corresponding_u, corresponding_v = pts_val_limit(corresponding_u, corresponding_v, w, h)
 
         # # vis: draw the pts to image
-        cv2.circle(im0, (corresponding_u, corresponding_v), 2, (0, 89, 255), 5)
-        cv2.circle(im0, (reg_u, reg_v), 2, (255, 255, 0), 5)
+        # cv2.circle(im0, (corresponding_u, corresponding_v), 2, (0, 89, 255), 5) # orange
+        # cv2.circle(im0, (reg_u, reg_v), 2, (255, 255, 0), 5) # light blue
+        # cv2.circle(im0, (reg_u_RA, reg_v_RA), 2, (255, 0, 0), 5) # blue
         
         # # vis: show the "mmwave dis" at the estimated uv pos in img
         real_dis = round(np.sqrt(px**2+py**2), 5)
