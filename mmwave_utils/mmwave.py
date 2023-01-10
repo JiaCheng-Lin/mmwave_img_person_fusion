@@ -41,8 +41,10 @@ def cal_time_error(now_time, mmwave_json):
     mmwave_time = datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time() # no date, so just convert to ".time()" format
     dT_mm = datetime.combine(datetime.today(), mmwave_time) # combine the date 
     dT_now = datetime.combine(datetime.today(), current_time) # combine the date 
-    time_error =  np.abs((dT_now - dT_mm).total_seconds()) # current_time-mmwave_time  # 0.015 second -> 15ms
+    time_error = (dT_now - dT_mm).total_seconds() # np.abs((dT_now - dT_mm).total_seconds()) # current_time-mmwave_time  # 0.015 second -> 15ms
     print("Time Error:", time_error, "sec ", current_time, mmwave_time)
+    if time_error < 0:
+        print("11111")
     
     return time_error
 
@@ -57,6 +59,9 @@ def mmwave_data_process(frame_idx, mmwave_json):
 
     # """ cal time error """ 
     time_error = cal_time_error(now_img_time, mmwave_json) # compare with image time(now time)
+
+    """ Time Synchronization """
+    
     
     return time_error, mmwave_json
 
@@ -78,7 +83,7 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
     detection = int(mmwave_json["Detection"]) # # number of person
     for i in range(detection): 
 
-        print("Vx, Vy: ", mmwave_json["JsonTargetList"][i]["Vx"], mmwave_json["JsonTargetList"][i]["Vy"])
+        # print("Vx, Vy: ", , mmwave_json["JsonTargetList"][i]["Vy"])
 
         # px = px*-1 <= flip horizontally because jorjinMMWave device app "display" part
         ID, px, py = mmwave_json["JsonTargetList"][i]["ID"], \
@@ -101,14 +106,14 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
         '''
 
         ### convert by intrinsic parameters
-        camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
-        mtx = np.array(camera_params['K'])
-        dist = np.array(camera_params['dist'])
-        points_2d = cv2.projectPoints(np.array([-px, -0.5, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
-        # print(tuple(points_2d.flatten()))
-        a = points_2d.flatten()
-        print(a)
-        cv2.circle(im0, (int(a[0]), int(a[1])), 2, (0,255,255), 5) # 
+        # camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
+        # mtx = np.array(camera_params['K'])
+        # dist = np.array(camera_params['dist'])
+        # points_2d = cv2.projectPoints(np.array([-px, -0.5, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
+        # # print(tuple(points_2d.flatten()))
+        # a = points_2d.flatten()
+        # print(a)
+        # cv2.circle(im0, (int(a[0]), int(a[1])), 2, (0,255,255), 5) # 
 
         
         # print("transform", corresponding_u, corresponding_v)
@@ -121,7 +126,7 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
 
         # # vis: draw the pts to image
         # cv2.circle(im0, (corresponding_u, corresponding_v), 2, (0, 89, 255), 5) # orange
-        # cv2.circle(im0, (reg_u, reg_v), 2, (255, 255, 0), 5) # light blue
+        cv2.circle(im0, (reg_u, reg_v), 2, (255, 255, 0), 5) # light blue
         # cv2.circle(im0, (reg_u_RA, reg_v_RA), 2, (255, 0, 0), 5) # blue
         
         # # vis: show the "mmwave dis" at the estimated uv pos in img
