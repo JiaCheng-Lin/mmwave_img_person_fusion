@@ -15,10 +15,12 @@ from sklearn.linear_model import LinearRegression, Ridge, Lasso, RANSACRegressor
 from sklearn.preprocessing import PolynomialFeatures # Polynomial
 from sklearn.pipeline import make_pipeline
 
+import copy
+
 # Connect to the mmwave server and get data
 def get_mmwave_data(frame_idx): 
     ### mmwave parameters ###
-    start = datetime.now()
+    
     host, port ="0.0.0.0", 6000
     addr = (host, port)
     buf = 2048
@@ -28,42 +30,91 @@ def get_mmwave_data(frame_idx):
         mmwave_socket = socket(AF_INET, SOCK_DGRAM) # UDP # # reference: https://ithelp.ithome.com.tw/articles/10205819
         mmwave_socket.bind(addr)
     
+    # start = datetime.now()
     data, addr = mmwave_socket.recvfrom(buf) # receive data from mmwave
     mmwave_json = json.loads(data) # to json format
-    end = datetime.now() 
-    # print((end-start).total_seconds())
+    # end = datetime.now() 
+    # print("t2 ", (end-start).total_seconds())
     return mmwave_json
 
-def cal_time_error(now_time, mmwave_json):
+def cal_time_error(t1, t2):
     # now_time = datetime.now()
-    current_time = now_time.time() # datetime.strptime(str(now_time), "%H%M%S%f")
+    # current_time = now_time.time() # datetime.strptime(str(now_time), "%H%M%S%f")
 
-    mmwave_time = datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time() # no date, so just convert to ".time()" format
-    dT_mm = datetime.combine(datetime.today(), mmwave_time) # combine the date 
-    dT_now = datetime.combine(datetime.today(), current_time) # combine the date 
+    dT_now = datetime.combine(datetime.today(), t1) # combine the date 
+    dT_mm = datetime.combine(datetime.today(), t2) # combine the date 
+    
     time_error = (dT_now - dT_mm).total_seconds() # np.abs((dT_now - dT_mm).total_seconds()) # current_time-mmwave_time  # 0.015 second -> 15ms
-    print("Time Error:", time_error, "sec ", current_time, mmwave_time)
-    if time_error < 0:
-        print("11111")
+    print("Time Error:", time_error, "sec ", t1, t2)
     
     return time_error
 
-def mmwave_data_process(frame_idx, mmwave_json):
+def mmwave_extrapolation(mmwave_json, t):
+    mtx_trans = np.array([[1, 0, t, 0, 0.5*t**2, 0],
+                         [0, 1, 0, t, 0, 0.5*t**2],
+                         [0, 0, 1, 0, t, 0],
+                         [0, 0, 0, 1, 0, t],
+                         [0, 0, 0, 0, 1, 0], 
+                         [0, 0, 0, 0, 0, 1]]) # x, y, vx, vy, ax, ay
+
+    detection = int(mmwave_json["Detection"]) # # number of person
+    for i in range(detection): 
+        x, y, vx, vy, ax, ay = mmwave_json["JsonTargetList"][i]["Px"], \
+                               mmwave_json["JsonTargetList"][i]["Py"], \
+                               -1*mmwave_json["JsonTargetList"][i]["Vx"], \
+                               mmwave_json["JsonTargetList"][i]["Vy"], \
+                               mmwave_json["JsonTargetList"][i]["Ax"], \
+                               mmwave_json["JsonTargetList"][i]["Ay"]
+        ori_mmwave = np.array([x, y, vx, vy, ax, ay])
+        new_mmwave = np.matmul(mtx_trans, ori_mmwave)
+        print(ori_mmwave)
+        print(new_mmwave)
+        
+        mmwave_json["JsonTargetList"][i]["Px"], \
+        mmwave_json["JsonTargetList"][i]["Py"], \
+        mmwave_json["JsonTargetList"][i]["Vx"], \
+        mmwave_json["JsonTargetList"][i]["Vy"], \
+        mmwave_json["JsonTargetList"][i]["Ax"], \
+        mmwave_json["JsonTargetList"][i]["Ay"] = new_mmwave
+
+    return mmwave_json
+
+def mmwave_data_process(frame_idx, pre_mmwave_json):
     # """ get mmwave data"""
-    now_img_time = datetime.now()
-    start = datetime.now()
+    now_img_time = datetime.now().time()
+    # start = datetime.now()
     mmwave_json = get_mmwave_data(frame_idx) # Connect to the mmwave server and get data
-    end = datetime.now() 
-    t1 = (end-start).total_seconds()
+    mmwave_json_time = datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time() # no date, so just convert to ".time()" format
+    # end = datetime.now() 
+    # t1 = (end-start).total_seconds()
+    # print("t1", t1)
     # mmwave_json = {'TimeStamp': '19:29:13:287', 'Detection': '0', 'JsonTargetList': [{"ID": 0, "Px": 6.28, "Py": 1.59, "Vx": 0.05, "Vy": -0.04, "Vrel": 0, "Ax": -0.09, "Ay": 0, "Arel": 0}]}
 
-    # """ cal time error """ 
-    time_error = cal_time_error(now_img_time, mmwave_json) # compare with image time(now time)
+    """ cal time error """ 
+    time_error = cal_time_error(now_img_time, mmwave_json_time) # compare with image time(now time)
 
+    ## radar fps, about 62ms
+    if pre_mmwave_json:
+        pre_mmwave_json_time = datetime.strptime(pre_mmwave_json['TimeStamp'], "%H:%M:%S:%f").time()
+        mmwave_time_error = cal_time_error(mmwave_json_time, pre_mmwave_json_time)
+        print("mmwave_time_error ", mmwave_time_error)
+
+    
     """ Time Synchronization """
+    sync_mmwave_json = copy.deepcopy(mmwave_json)
+    ## extrapolation
+    if time_error > 0:  # # Use Uniform Acceleration when T_cam > T_radar
+        sync_mmwave_json = mmwave_extrapolation(sync_mmwave_json, time_error)
+
+    ## interpolation
+    elif time_error < 0 and pre_mmwave_json: # # Use Interpolation with Adjacent radar data when T_cam < T_radar
+        
+        print("1111111111111111")
+        pass
     
-    
-    return time_error, mmwave_json
+    pre_mmwave_json = mmwave_json
+
+    return time_error, sync_mmwave_json, mmwave_json, pre_mmwave_json
 
 def pts_val_limit(x, y, w, h):
     x = -10 if x < 0 else x
@@ -115,7 +166,7 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
         # print(a)
         # cv2.circle(im0, (int(a[0]), int(a[1])), 2, (0,255,255), 5) # 
 
-        
+
         # print("transform", corresponding_u, corresponding_v)
         # print("regression", reg_u, reg_v)
 
@@ -157,6 +208,44 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
     #     xy_list.append([corresponding_u, corresponding_v, real_dis, ID, px, py])
     
     return im0, xy_list
+
+### for test
+# project the mmwave pt(s) to image using transform "T"
+def process_mmwave_test(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=None): # # origin_px/py: jorjin Device original point 
+    T = np.array([[-168.79149551693234, 0.0724572081552246, 297.4314052813067], [-18.799447344663356, -97.81708310532088, 789.829879489633], [4.85722573273506e-17, -1.249000902703301e-16, 1.0000000000000013]])
+    
+    # # # Done: model initialization in mmwave_main file
+    
+    xy_list = [] # px, py, real_dis list in single frame
+    detection = int(mmwave_json["Detection"]) # # number of person
+    for i in range(detection): 
+
+        # print("Vx, Vy: ", , mmwave_json["JsonTargetList"][i]["Vy"])
+
+        # px = px*-1 <= flip horizontally because jorjinMMWave device app "display" part
+        ID, px, py = mmwave_json["JsonTargetList"][i]["ID"], \
+                    round(mmwave_json["JsonTargetList"][i]["Px"]-origin_px, 5), \
+                    round(mmwave_json["JsonTargetList"][i]["Py"]-origin_py, 5) # minus the origin_x & y
+        
+        
+        ### predict by sklearn, polynominal regression
+        reg_uv = regressor.predict(np.array([[px, py]])) # origin 
+        reg_u, reg_v = int(reg_uv[0][0]), int(reg_uv[0][1])
+
+
+        cv2.circle(im0, (reg_u, reg_v), 2, (0, 255, 0), 5) 
+        # cv2.circle(im0, (reg_u_RA, reg_v_RA), 2, (255, 0, 0), 5) # blue
+        
+        # # vis: show the "mmwave dis" at the estimated uv pos in img
+        real_dis = round(np.sqrt(px**2+py**2), 5)
+        cv2.putText(im0, str(real_dis), (reg_u, reg_v+20), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+            0.8, (0, 255, 0), 1, cv2.LINE_AA)
+
+        xy_list.append([reg_u, reg_v, real_dis, ID, px, py])
+
+    return im0, xy_list
+
+
 
 # return "True" if mmwave pt within bbox 
 def mmwavePts_within_bbox(px, py, tlwh):

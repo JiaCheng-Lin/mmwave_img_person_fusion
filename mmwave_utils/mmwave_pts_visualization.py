@@ -131,6 +131,49 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
     return bg
 
 
+# # using opencv to draw, fast, spend about 0.001s per frame
+def draw_mmwave_pts_test(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: mmwave json
+    # start = datetime.now() ### time
+    h, w, _ = coor_size # default coor_size: (600, 800, 3) 
+    origin_pt = np.array((w//2, 30))
+    gap = 60 # default pts dis: 60 pixels/meter
+
+    # show origin points
+    if len(xy_list) == 0 and data: # data(json file) exists.
+        # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
+        xy_list = process_json_data(data) # [[px, py, ID], ... ], px, py: ... meter
+        # print(xy_list)
+
+        for px, py, ID, pt_color, Vx, Vy in xy_list:
+            bg_pt = (origin_pt + (px*gap, py*gap)).astype(int)
+            cv2.circle(bg, bg_pt, 4, (255, 0, 255), -1) # use the distinguish color from xy_list[3]
+
+            # draw direction arrow
+            Vx *= -1
+            Vx, Vy = Vx/math.sqrt((Vx**2+Vy**2))*20, Vy/(math.sqrt(Vx**2+Vy**2))*20
+            end_point = bg_pt + (int(Vx), int(Vy))
+            # print(bg_pt, end_point)
+            cv2.arrowedLine(bg, bg_pt, end_point, (0, 255, 0), 3)
+
+            # write pos info
+            dis = round(np.sqrt(px**2+py**2), 3)
+            info = str(ID)+" ("+str(px)+", "+str(py)+") "+str(dis)
+            cv2.putText(bg, info, (bg_pt[0]+5, bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.7, (84, 153, 34), 1, cv2.LINE_AA)
+
+            
+    # show matched points
+    else: 
+        for px, py, ID, pt_color in xy_list:
+            bg_pt = (origin_pt + (px*gap, py*gap)).astype(int)
+            cv2.circle(bg, bg_pt, 4, pt_color, -1) # use the distinguish color from xy_list[3]
+            
+            dis = round(np.sqrt(px**2+py**2), 3)
+            info = str(ID)+" ("+str(px)+", "+str(py)+") "+str(dis)
+            cv2.putText(bg, info, (bg_pt[0]+5, bg_pt[1]-2), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.7, (84, 153, 34), 1, cv2.LINE_AA)
+
+    return bg
+
+
 # # using plt to draw 
 ### Abandon, too slow to use in real-time, spend about 0.15s per frame
 def plot_xy(xy_list):
