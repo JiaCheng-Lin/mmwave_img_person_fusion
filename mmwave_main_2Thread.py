@@ -3,6 +3,7 @@ import os
 import os.path as osp
 import time
 import cv2
+import threading
 import torch
 
 from loguru import logger
@@ -307,7 +308,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     timer = Timer()
     frame_id = 0
     results = []
-    mmwave_json = pre_mmwave_json = None # initialize mmwave_json data
+    # mmwave_json = pre_mmwave_json = None # initialize mmwave_json data
     previous_ID_matches  = [] # record previous ID matches
 
     # # read mmwave background image
@@ -315,26 +316,22 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     
     # # regression model initialization (mmwave pts project to img)
     regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_01_13_15_48_12.joblib') 
-    
+    t_total = 0
+    t_cnt = 0
     while True:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
         # cv2.imshow('frame', frame)
-        
-        """get mmwave data"""
-        if frame_id != 0 : # reason: (initializing img model)Let the image be processed a frame. Otherwise, the time error will be very large 
-            mm_time_error, sync_mmwave_json, mmwave_json, pre_mmwave_json = mmwave_data_process(frame_id, pre_mmwave_json)
-
-            if mm_time_error >= 0.1: # time error > 100 ms -> no match -> continue
-                # cv2.putText(frame, "mm_time_error:"+str(mm_time_error),  \
-                #             (30, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, \
-                #             0.8, (255, 255, 0), 1, cv2.LINE_AA)
-                # cv2.imshow('frame', frame)
-                continue # if time_error > threshold (img speed > mmwave speed), skip this img.
-        """get mmwave data"""
-
+     
         if ret_val:
+            ## time error calculation between mmwave and webcam
+            time_error = cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time())
+
+            ##  mmwave data Time Synchronization before image process
+            sync_mmwave_json = mmwave_time_sync(mmwave_json, pre_mmwave_json, time_error)
+
+            # # image process: get bbox and id of each person; person detection and tracking, about 0.1s
             outputs, img_info = predictor.inference(frame, timer)
             if outputs[0] is not None:
                 online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
@@ -360,39 +357,43 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 timer.toc()
                 online_im = img_info['raw_img']
 
-            # print("online_ids", online_ids)
-            # print("online_tlwhs", online_tlwhs)
-            """!!! mmwave process !!!"""
-            if frame_id != 0 :
-                # print("frame_id", frame_id)
-                """ draw mmwave pts """  # spend 0.001s
-                bg_copy = copy.deepcopy(bg)
-                mmwave_pt_visual = draw_mmwave_pts(bg_copy, mmwave_json)
-                mmwave_pt_visual = draw_mmwave_pts_test(bg_copy, sync_mmwave_json)
+           
+            # ## time error calculation between mmwave and webcam
+            # t_err = cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time())
+            # if t_err > 0.1:
+            #     print("t_err>0.1:", t_err)
+            # t_total += t_err
+            # t_cnt += 1
+            # # print(cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time()))
+            # print("t2", t_total / t_cnt)
 
-                cv2.imshow("mmwave", mmwave_pt_visual)
-                """ draw mmwave pts """
+            ## mmwave pts visualization by OpenCV
+            bg_copy = copy.deepcopy(bg)
+            mmwave_pt_visual = draw_mmwave_pts(bg_copy, mmwave_json)
+            mmwave_pt_visual = draw_mmwave_pts_test(bg_copy, sync_mmwave_json)
+            cv2.imshow("mmwave", mmwave_pt_visual)
 
-                """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
-                # start = datetime.now()
-                online_im, estimated_uv_list = process_mmwave(mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-                online_im, _ = process_mmwave_test(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-                # end = datetime.now()  
-                # print("Transform time", (end-start).total_seconds()) # about 1ms.
+            """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
+            # start = datetime.now()
+            online_im, estimated_uv_list = process_mmwave(mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            online_im, _ = process_mmwave_test(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            # end = datetime.now()  
+            # print("Transform time", (end-start).total_seconds()) # about 1ms.
 
-                """ cal error: find the corresponding person """
-                ### px, py, real_dis, ID_mmwave <=> center_u, center_v, esti_dis, ID_img (xy_list <=> center_pt_list)
-                center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
-                
-                # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
-                online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(estimated_uv_list, center_pt_list, online_im, previous_ID_matches)
-
-                ### after match, show a new mmwave_pt_visual
-                new_bg_copy = copy.deepcopy(bg)
-                new_mmwave_pt_visual = draw_mmwave_pts(new_bg_copy, xy_list=new_mmwave_pts_list)
-                cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
-            """!!! mmwave process !!!"""
+            """ cal error: find the corresponding person """
+            ### px, py, real_dis, ID_mmwave <=> center_u, center_v, esti_dis, ID_img (xy_list <=> center_pt_list)
+            center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
             
+            # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
+            online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(estimated_uv_list, center_pt_list, online_im, previous_ID_matches)
+
+            ### after match, show a new mmwave_pt_visual
+            new_bg_copy = copy.deepcopy(bg)
+            new_mmwave_pt_visual = draw_mmwave_pts(new_bg_copy, xy_list=new_mmwave_pts_list)
+            cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
+            """!!! mmwave process !!!"""
+
+
             if args.save_result:
                 vid_writer.write(online_im)
                 if args.demo == "webcam": 
@@ -411,6 +412,21 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             f.writelines(results)
         logger.info(f"save results to {res_file}")
 
+## receive mmwave data  
+def receive_data(udp_socket, BUFSIZE):
+    while True:
+        data, addr = udp_socket.recvfrom(BUFSIZE)
+        
+        process_data(data) 
+
+def process_data(data):
+    global mmwave_json
+    global pre_mmwave_json
+    if data:
+        if mmwave_json != "":
+            pre_mmwave_json = mmwave_json
+        mmwave_json = json.loads(data)
+        # print("mmwave:", mmwave_json["TimeStamp"])
 
 def main(exp, args):
     if not args.experiment_name:
@@ -476,6 +492,14 @@ def main(exp, args):
     else:
         trt_file = None
         decoder = None
+    
+    """ receive mmwave data """
+    udp_socket = socket(AF_INET, SOCK_DGRAM)
+    udp_socket.bind(("0.0.0.0", 6000)) # ip and port of jorjin mmwave app
+    BUFSIZE = 2048
+    # # Add a thread for receiving data from mmwave radar
+    threading.Thread(target=receive_data, args=(udp_socket, BUFSIZE), daemon=True).start()
+    """ receive mmwave data """
 
     predictor = Predictor(model, exp, trt_file, decoder, args.device, args.fp16)
     current_time = time.localtime()
@@ -486,6 +510,9 @@ def main(exp, args):
 
 
 if __name__ == "__main__":
+    # mmwave parameters init
+    mmwave_json = pre_mmwave_json = ""
+
     args = make_parser().parse_args()
     exp = get_exp(args.exp_file, args.name)
 

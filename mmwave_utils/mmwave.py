@@ -17,6 +17,9 @@ from sklearn.pipeline import make_pipeline
 
 import copy
 
+
+## old version, abandon later, (20230209)
+## Because of the change from single-threaded to dual-threaded
 # Connect to the mmwave server and get data
 def get_mmwave_data(frame_idx): 
     ### mmwave parameters ###
@@ -45,7 +48,7 @@ def cal_time_error(t1, t2):
     dT_mm = datetime.combine(datetime.today(), t2) # combine the date 
     
     time_error = (dT_now - dT_mm).total_seconds() # np.abs((dT_now - dT_mm).total_seconds()) # current_time-mmwave_time  # 0.015 second -> 15ms
-    print("Time Error:", time_error, "sec ", t1, t2)
+    # print("Time Error:", time_error, "sec ", t1, t2)
     
     return time_error
 
@@ -79,6 +82,9 @@ def mmwave_extrapolation(mmwave_json, t):
 
     return mmwave_json
 
+
+## old version, abandon later, (20230209)
+## Because of the change from single-thread to dual-thread
 def mmwave_data_process(frame_idx, pre_mmwave_json):
     # """ get mmwave data"""
     now_img_time = datetime.now().time()
@@ -115,6 +121,24 @@ def mmwave_data_process(frame_idx, pre_mmwave_json):
     pre_mmwave_json = mmwave_json
 
     return time_error, sync_mmwave_json, mmwave_json, pre_mmwave_json
+
+
+# mmwave data Time Synchronization
+def mmwave_time_sync(mmwave_json, pre_mmwave_json, time_error):
+    sync_mmwave_json = copy.deepcopy(mmwave_json)
+    ## extrapolation
+    if time_error > 0:  # # Use Uniform Acceleration when T_cam > T_radar
+        sync_mmwave_json = mmwave_extrapolation(sync_mmwave_json, time_error)
+
+    ## interpolation
+    elif time_error < 0 and pre_mmwave_json: # # Use Interpolation with Adjacent radar data when T_cam < T_radar
+        
+        ## TODO, interpolation
+        print("1111111111111111")
+        pass
+    
+    return sync_mmwave_json
+
 
 def pts_val_limit(x, y, w, h):
     x = -10 if x < 0 else x
