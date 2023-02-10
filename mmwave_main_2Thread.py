@@ -315,7 +315,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
     
     # # regression model initialization (mmwave pts project to img)
-    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_01_13_15_48_12.joblib') 
+    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_02_10_13_17_41.joblib') 
     t_total = 0
     t_cnt = 0
     while True:
@@ -329,7 +329,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             time_error = cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time())
 
             ##  mmwave data Time Synchronization before image process
+            ori_mmwave_json = copy.deepcopy(mmwave_json) # for comparison with sync
             sync_mmwave_json = mmwave_time_sync(mmwave_json, pre_mmwave_json, time_error)
+
 
             # # image process: get bbox and id of each person; person detection and tracking, about 0.1s
             outputs, img_info = predictor.inference(frame, timer)
@@ -369,14 +371,15 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
             ## mmwave pts visualization by OpenCV
             bg_copy = copy.deepcopy(bg)
-            mmwave_pt_visual = draw_mmwave_pts(bg_copy, mmwave_json)
-            mmwave_pt_visual = draw_mmwave_pts_test(bg_copy, sync_mmwave_json)
+            mmwave_pt_visual = draw_mmwave_pts(bg_copy, ori_mmwave_json)
+            mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
             cv2.imshow("mmwave", mmwave_pt_visual)
 
             """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
+
             # start = datetime.now()
-            online_im, estimated_uv_list = process_mmwave(mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-            online_im, _ = process_mmwave_test(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             # end = datetime.now()  
             # print("Transform time", (end-start).total_seconds()) # about 1ms.
 

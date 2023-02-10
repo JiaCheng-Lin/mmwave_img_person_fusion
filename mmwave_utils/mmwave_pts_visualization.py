@@ -132,7 +132,7 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
 
 
 # # using opencv to draw, fast, spend about 0.001s per frame
-def draw_mmwave_pts_test(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: mmwave json
+def draw_mmwave_pts_sync(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: mmwave json
     # start = datetime.now() ### time
     h, w, _ = coor_size # default coor_size: (600, 800, 3) 
     origin_pt = np.array((w//2, 30))
@@ -151,7 +151,7 @@ def draw_mmwave_pts_test(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # da
             # draw direction arrow
             Vx *= -1
             Vx, Vy = Vx/math.sqrt((Vx**2+Vy**2))*20, Vy/(math.sqrt(Vx**2+Vy**2))*20
-            end_point = bg_pt + (int(Vx), int(Vy))
+            end_point = bg_pt + (int(-Vx), int(Vy))
             # print(bg_pt, end_point)
             cv2.arrowedLine(bg, bg_pt, end_point, (0, 255, 0), 3)
 

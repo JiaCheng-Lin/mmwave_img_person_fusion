@@ -233,9 +233,9 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
     
     return im0, xy_list
 
-### for test
+### for sync
 # project the mmwave pt(s) to image using transform "T"
-def process_mmwave_test(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=None): # # origin_px/py: jorjin Device original point 
+def process_mmwave_sync(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=None): # # origin_px/py: jorjin Device original point 
     T = np.array([[-168.79149551693234, 0.0724572081552246, 297.4314052813067], [-18.799447344663356, -97.81708310532088, 789.829879489633], [4.85722573273506e-17, -1.249000902703301e-16, 1.0000000000000013]])
     
     # # # Done: model initialization in mmwave_main file
