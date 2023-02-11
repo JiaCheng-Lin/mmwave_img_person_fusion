@@ -321,7 +321,7 @@ def linear_assignment(cost_matrix, thresh=10000.0): # thresh=1000.0: pt out of b
 
 # # xy_list: mmwave list, [corresponding_u, corresponding_v, real_dis, ID, px, py]
 # # center_pt_list: img list, [center_pt_x, center_pt_y, fake_dis, ID, tlwh]
-def pt_match(xy_list, center_pt_list, im0, previous_ID_matches= []):
+def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
     ## get error matrix between xy_list(mmwave) and center_pt_list(camera)
     error_matrix = getErrorMatrix(xy_list, center_pt_list, error_threshold=150)
     # print(error_matrix)

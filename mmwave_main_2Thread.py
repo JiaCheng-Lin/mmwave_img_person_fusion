@@ -332,8 +332,13 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             ori_mmwave_json = copy.deepcopy(mmwave_json) # for comparison with sync
             sync_mmwave_json = mmwave_time_sync(mmwave_json, pre_mmwave_json, time_error)
 
+            ## mmwave pts visualization by OpenCV, time consume: about 1ms. 
+            bg_copy = copy.deepcopy(bg)
+            # mmwave_pt_visual = draw_mmwave_pts(bg_copy, ori_mmwave_json)
+            mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
+            cv2.imshow("mmwave", mmwave_pt_visual)
 
-            # # image process: get bbox and id of each person; person detection and tracking, about 0.1s
+            # # image process: get bbox and id of each person; person detection and tracking, about 0.1s per frame
             outputs, img_info = predictor.inference(frame, timer)
             if outputs[0] is not None:
                 online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
@@ -369,16 +374,11 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             # # print(cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time()))
             # print("t2", t_total / t_cnt)
 
-            ## mmwave pts visualization by OpenCV
-            bg_copy = copy.deepcopy(bg)
-            mmwave_pt_visual = draw_mmwave_pts(bg_copy, ori_mmwave_json)
-            mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
-            cv2.imshow("mmwave", mmwave_pt_visual)
 
             """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
 
             # start = datetime.now()
-            online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             # end = datetime.now()  
             # print("Transform time", (end-start).total_seconds()) # about 1ms.
@@ -395,7 +395,6 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             new_mmwave_pt_visual = draw_mmwave_pts(new_bg_copy, xy_list=new_mmwave_pts_list)
             cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
             """!!! mmwave process !!!"""
-
 
             if args.save_result:
                 vid_writer.write(online_im)
@@ -423,8 +422,8 @@ def receive_data(udp_socket, BUFSIZE):
         process_data(data) 
 
 def process_data(data):
-    global mmwave_json
-    global pre_mmwave_json
+    global mmwave_json, pre_mmwave_json # must be declared as global var, otherwise it is a local variable in function
+    
     if data:
         if mmwave_json != "":
             pre_mmwave_json = mmwave_json
