@@ -70,8 +70,8 @@ def mmwave_extrapolation(mmwave_json, t):
                                mmwave_json["JsonTargetList"][i]["Ay"]
         ori_mmwave = np.array([x, y, vx, vy, ax, ay])
         new_mmwave = np.matmul(mtx_trans, ori_mmwave)
-        print(ori_mmwave)
-        print(new_mmwave)
+        # print(ori_mmwave)
+        # print(new_mmwave)
         
         mmwave_json["JsonTargetList"][i]["Px"], \
         mmwave_json["JsonTargetList"][i]["Py"], \
@@ -247,10 +247,11 @@ def process_mmwave_sync(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regresso
         # print("Vx, Vy: ", , mmwave_json["JsonTargetList"][i]["Vy"])
 
         # px = px*-1 <= flip horizontally because jorjinMMWave device app "display" part
-        ID, px, py = mmwave_json["JsonTargetList"][i]["ID"], \
+        ID, px, py, vx, vy = mmwave_json["JsonTargetList"][i]["ID"], \
                     round(mmwave_json["JsonTargetList"][i]["Px"]-origin_px, 5), \
-                    round(mmwave_json["JsonTargetList"][i]["Py"]-origin_py, 5) # minus the origin_x & y
-        
+                    round(mmwave_json["JsonTargetList"][i]["Py"]-origin_py, 5), \
+                    mmwave_json["JsonTargetList"][i]["Vx"], \
+                    mmwave_json["JsonTargetList"][i]["Vy"]
         
         ### predict by sklearn, polynominal regression
         reg_uv = regressor.predict(np.array([[px, py]])) # origin 
@@ -265,7 +266,7 @@ def process_mmwave_sync(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regresso
         cv2.putText(im0, str(real_dis), (reg_u, reg_v+20), cv2.FONT_HERSHEY_COMPLEX_SMALL,
             0.8, (0, 255, 0), 1, cv2.LINE_AA)
 
-        xy_list.append([reg_u, reg_v, real_dis, ID, px, py])
+        xy_list.append([reg_u, reg_v, real_dis, ID, px, py, vx, vy])
 
     return im0, xy_list
 
@@ -286,19 +287,31 @@ def getErrorMatrix(xy_list, center_pt_list, error_threshold=200):
     # mmwave compare to image
     error_matrix = [] # two pairs of lists "error array"
     for xy_dis in xy_list: # mmwave
-        px, py, real_dis, ID_mmwave, _, _ = xy_dis
+        px, py, real_dis, ID_mmwave, _, _, vx, vy = xy_dis
+        vx, vy = -vx*10, -vy*10 # rotate 180 degree, to align with the center_pt direction of image
+        print("vx, vy", vx, vy)
         row_error_matrix = []
         # print("xy_dis", xy_dis)
         for uv_dis in center_pt_list: # img center pts
             # print("uv_dis", uv_dis)
-            u, v, fake_dis, ID_img, tlwh = uv_dis
+            u, v, fake_dis, ID_img, tlwh, dir_pt = uv_dis
+            same_dir = True
+            if dir_pt != (0, 0):
+                img_vx, img_vy = dir_pt[0]-u, dir_pt[1]-v
+                print("img_vx, img_vy", img_vx, img_vy)
+                print("vx*vx, vy*vy", vx*img_vx, vy*img_vy)
+                if vx*img_vx>=0 and vy*img_vy>=0:
+                    same_dir = True
+                else:
+                    same_dir = False
             error = math.sqrt((px-u)**2+(py-v)**2+((real_dis-fake_dis)*100)**2)
             # print("pts error", error)
-            if not mmwavePts_within_bbox(px, py, tlwh) or error > error_threshold: # # return "True" if mmwave pt within bbox
+            if not mmwavePts_within_bbox(px, py, tlwh) or error > error_threshold or not same_dir : # # return "True" if mmwave pt within bbox
                 row_error_matrix.append(100000.0) # not match, the pt out of bbox
                 continue
             # print("real_dis-fake_dis", real_dis-fake_dis)
             row_error_matrix.append(error)
+        print()
         error_matrix.append(row_error_matrix)
     
     return error_matrix # # row: mmwave, col: img(camera)
@@ -341,7 +354,7 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
 
         ID_img = int(center_pt_list[j][3])
         l, t, _, _ = map(int, center_pt_list[j][4]) # map all para to int type
-        _, _, real_dis, ID_mmwave, px, py = xy_list[i]
+        _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[i]
         
         cv2.putText(im0, "mmW "+str(real_dis), (l, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
 
@@ -385,36 +398,10 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
     # # if unmatched mmwave exists, just show it 
     if len(unmatched_mmwave)!=0: # unmatched_mmwave idx
         for idx in unmatched_mmwave:
-            _, _, real_dis, ID_mmwave, px, py = xy_list[idx]
+            _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[idx]
             new_mmwave_pts_list.append([px, py, ID_mmwave, (0, 0, 0)])  # add to mmwave visualization
             # give black color for vis to distinguish
     
     # print("new_mmwave_pts_list", new_mmwave_pts_list)
-
-
-
-    # ### Abandon..., old match version
-    # pt_relation = []
-    # if error_matrix:
-    #     row_mark = [] # will be pass after find the matched pt.
-    #     for mm_idx in range(len(error_matrix[0])):
-    #         min_r, min_c, min_error = -1, -1, 100000.0
-    #         for im_idx in range(len(error_matrix)):
-    #             if im_idx in row_mark: # pass after find the matched pt.
-    #                 continue
-    #             if min_error > error_matrix[im_idx][mm_idx]:
-    #                 min_error = error_matrix[im_idx][mm_idx]
-    #                 min_r, min_c = im_idx, mm_idx
-    #                 # print(min_r, min_c)
-    #         # print(min_r, min_r)
-    #         if min_r != -1 and min_c != -1:
-    #             row_mark.append(min_r)
-    #             pt_relation.append([min_r, min_c])
-
-    #     # print(pt_relation)
-    # for pt in pt_relation:
-    #     i, j = pt[0], pt[1]
-    #     cv2.putText(im0, "mmW "+str(xy_list[i][2]), (center_pt_list[j][0], center_pt_list[j][1]), 
-    #                 cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
 
     return im0, new_mmwave_pts_list, ID_matches

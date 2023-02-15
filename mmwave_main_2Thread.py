@@ -282,6 +282,33 @@ def get_center_pt_list(online_im, online_ids, online_tlwhs):
 
     return center_pt_list, online_im
 
+### Need to improve code 
+def draw_frame_arrow(pre, cur, img):
+    # pre, cur: [center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh]
+    new_list = copy.deepcopy(cur)
+    for i, (x1, y1, _, id1, _) in enumerate(cur):
+        new_list[i].append((0, 0)) # init, no direction.
+        if pre:
+            for x2, y2, _, id2, _ in pre:
+                if id1 == id2:
+                    # draw direction arrow
+                    Vx, Vy = x1-x2, y1-y2
+                    dis = math.sqrt(Vx**2+Vy**2)
+                    # print("dis: ", math.sqrt(Vx**2+Vy**2)) # person stand -> within about 10 pixel 
+                    if Vx == 0 and Vy == 0 or dis <= 10: # if dis<5 pixel, skip it
+                        break
+
+                    Vx, Vy = Vx/math.sqrt((Vx**2+Vy**2))*20, Vy/(math.sqrt(Vx**2+Vy**2))*20  # normalize the length in fig
+                    end_point = (x1+int(Vx), y1+int(Vy)) # the direction
+                    cv2.arrowedLine(img, (x1, y1), end_point, (0, 255, 0), 3) 
+                    new_list[i][-1] = end_point # new direction to the center_list
+                    break
+
+    # print("new_list", new_list)
+    return new_list
+
+
+
 ## process the video or webcam flow
 def imageflow_demo(predictor, vis_folder, current_time, args):
     cap = cv2.VideoCapture(args.path if args.demo == "video" else args.camid)
@@ -309,6 +336,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     frame_id = 0
     results = []
     # mmwave_json = pre_mmwave_json = None # initialize mmwave_json data
+    pre_center_pt_list = []
+    center_pt_list = []
     previous_ID_matches  = [] # record previous ID matches
 
     # # read mmwave background image
@@ -319,17 +348,26 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     t_total = 0
     t_cnt = 0
     while True:
-        if frame_id % 20 == 0:
-            logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
+        # if frame_id % 20 == 0:
+        #     logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
         # cv2.imshow('frame', frame)
+
+        # ## time error calculation between mmwave and webcam
+        # t_err = cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time())
+        # if t_err > 0.1:
+        #     print("t_err>0.1:", t_err)
+        # t_total += t_err
+        # t_cnt += 1
+        # # print(cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time()))
+        # print("mean t", t_total / t_cnt)
      
         if ret_val:
             ## time error calculation between mmwave and webcam
             time_error = cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time())
 
             ##  mmwave data Time Synchronization before image process
-            ori_mmwave_json = copy.deepcopy(mmwave_json) # for comparison with sync
+            # ori_mmwave_json = copy.deepcopy(mmwave_json) # for comparison with sync
             sync_mmwave_json = mmwave_time_sync(mmwave_json, pre_mmwave_json, time_error)
 
             ## mmwave pts visualization by OpenCV, time consume: about 1ms. 
@@ -364,19 +402,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 timer.toc()
                 online_im = img_info['raw_img']
 
-           
-            # ## time error calculation between mmwave and webcam
-            # t_err = cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time())
-            # if t_err > 0.1:
-            #     print("t_err>0.1:", t_err)
-            # t_total += t_err
-            # t_cnt += 1
-            # # print(cal_time_error(datetime.now().time(), datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time()))
-            # print("t2", t_total / t_cnt)
-
 
             """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
-
             # start = datetime.now()
             # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
@@ -384,11 +411,19 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             # print("Transform time", (end-start).total_seconds()) # about 1ms.
 
             """ cal error: find the corresponding person """
-            ### px, py, real_dis, ID_mmwave <=> center_u, center_v, esti_dis, ID_img (xy_list <=> center_pt_list)
+            ### px, py, real_dis, ID_mmwave <=> center_u, center_v, esti_dis, ID_img, tlwh, dir_pt (xy_list <=> center_pt_list)
+            if center_pt_list:
+                pre_center_pt_list = center_pt_list
+    
             center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
-            
+
+            # Draw the direction of each person's center point between frames. 
+
+            new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
+            # print("new center pt", new_center_pt_list) # center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
+
             # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
-            online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(estimated_uv_list, center_pt_list, online_im, previous_ID_matches)
+            online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(estimated_uv_list, new_center_pt_list, online_im, previous_ID_matches)
 
             ### after match, show a new mmwave_pt_visual
             new_bg_copy = copy.deepcopy(bg)
