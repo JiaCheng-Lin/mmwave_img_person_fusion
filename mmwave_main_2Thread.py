@@ -62,14 +62,14 @@ def make_parser():
     parser.add_argument(
         "-f",
         "--exp_file",
-        default=r'C:\TOBY\jorjin\object_tracking\ByteTrack\exps\example\mot/yolox_x_mix_det.py',
+        default=r'C:\TOBY\jorjin\object_tracking\ByteTrack\exps\example\mot/yolox_x_mix_det.py', # yolox_tiny_mix_det
         type=str,
         help="pls input your expriment description file",
     )
     parser.add_argument(
         "-c", 
         "--ckpt", 
-        default=r'C:\TOBY\jorjin\object_tracking\ByteTrack\pretrained/bytetrack_x_mot17.pth.tar', 
+        default=r'C:\TOBY\jorjin\object_tracking\ByteTrack\pretrained/bytetrack_x_mot17.pth.tar',  # bytetrack_tiny_mot17
         type=str, 
         help="ckpt for eval"
     )
@@ -171,6 +171,8 @@ class Predictor(object):
         self.rgb_means = (0.485, 0.456, 0.406)
         self.std = (0.229, 0.224, 0.225)
 
+    # # about fps issues: https://github.com/ifzhang/ByteTrack/issues/156
+    # # the timer calculation is wrong.
     def inference(self, img, timer):
         img_info = {"id": 0}
         if isinstance(img, str):
@@ -183,15 +185,19 @@ class Predictor(object):
         img_info["height"] = height
         img_info["width"] = width
         img_info["raw_img"] = img
-
+        # s = datetime.now()  
+        # # spend about 0.06 s
+        timer.tic()
         img, ratio = preproc(img, self.test_size, self.rgb_means, self.std)
+        # e = datetime.now() 
+        # print("Transform time", (e-s).total_seconds())
         img_info["ratio"] = ratio
         img = torch.from_numpy(img).unsqueeze(0).float().to(self.device)
         if self.fp16:
             img = img.half()  # to FP16
 
+        # spend about 0.048 s
         with torch.no_grad():
-            timer.tic()
             outputs = self.model(img)
             if self.decoder is not None:
                 outputs = self.decoder(outputs, dtype=outputs.type())
@@ -350,16 +356,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
     prev_frame_time = 0
     new_frame_time = 0
-    start = datetime.now() 
     while True:
-        
-        if frame_id % 20 == 0:
-            
-            end = datetime.now() 
-            print("Transform time", (end-start).total_seconds())
-            start = datetime.now() 
-
-            logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
+        # if frame_id % 20 == 0:
+        #     logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
         # cv2.imshow('frame', frame)
 
@@ -403,16 +402,18 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                             f"{frame_id},{tid},{tlwh[0]:.2f},{tlwh[1]:.2f},{tlwh[2]:.2f},{tlwh[3]:.2f},{t.score:.2f},-1,-1,-1\n"
                         )
                 timer.toc()
+                
                 online_im = plot_tracking(
                     img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1, fps=1. / timer.average_time
                 )
                 
+                # 
                 if center_pt_list:
                     pre_center_pt_list = center_pt_list
 
                 center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
-                # Draw the direction of each person's center point between frames. 
 
+                # Draw the direction of each person's center point between frames. 
                 new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
                 # print("new center pt", new_center_pt_list) # center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
 
@@ -449,6 +450,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             ch = cv2.waitKey(1)
             if ch == 27 or ch == ord("q") or ch == ord("Q"):
                 break
+
         else:
             break
         frame_id += 1

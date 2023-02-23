@@ -300,7 +300,7 @@ def getErrorMatrix(xy_list, center_pt_list, error_threshold=200):
                 img_vx, img_vy = dir_pt[0]-u, dir_pt[1]-v
                 # print("img_vx, img_vy", img_vx, img_vy)
                 # print("vx*vx, vy*vy", vx*img_vx, vy*img_vy)
-                vec_dot = vx*img_vx+vy*img_vy
+                vec_dot = vx*img_vx+vy*img_vy # angle < 90 degree
                 # print("dot", vec_dot)
 
             error = math.sqrt((px-u)**2+(py-v)**2+((real_dis-fake_dis)*100)**2)
@@ -355,7 +355,7 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
         l, t, _, _ = map(int, center_pt_list[j][4]) # map all para to int type
         _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[i]
         
-        cv2.putText(im0, "mmW "+str(real_dis), (l, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(im0, str(ID_mmwave)+" "+str(real_dis), (l+20, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
 
         new_mmwave_pts_list.append([px, py, ID_mmwave, (232, 229, 26)]) # give green color for vis to distinguish
         ID_matches.append([ID_mmwave, ID_img, px, py]) # save for previous ID matches
