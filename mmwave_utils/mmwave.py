@@ -64,7 +64,7 @@ def mmwave_extrapolation(mmwave_json, t):
     for i in range(detection): 
         x, y, vx, vy, ax, ay = mmwave_json["JsonTargetList"][i]["Px"], \
                                mmwave_json["JsonTargetList"][i]["Py"], \
-                               -1*mmwave_json["JsonTargetList"][i]["Vx"], \
+                               -mmwave_json["JsonTargetList"][i]["Vx"], \
                                mmwave_json["JsonTargetList"][i]["Vy"], \
                                mmwave_json["JsonTargetList"][i]["Ax"], \
                                mmwave_json["JsonTargetList"][i]["Ay"]
@@ -288,30 +288,29 @@ def getErrorMatrix(xy_list, center_pt_list, error_threshold=200):
     error_matrix = [] # two pairs of lists "error array"
     for xy_dis in xy_list: # mmwave
         px, py, real_dis, ID_mmwave, _, _, vx, vy = xy_dis
-        vx, vy = -vx*10, -vy*10 # rotate 180 degree, to align with the center_pt direction of image
-        print("vx, vy", vx, vy)
+        vx, vy = -vx, -vy # rotate 180 degree, to align with the center_pt direction of image
+        # print("vx, vy", vx, vy)
         row_error_matrix = []
         # print("xy_dis", xy_dis)
         for uv_dis in center_pt_list: # img center pts
             # print("uv_dis", uv_dis)
             u, v, fake_dis, ID_img, tlwh, dir_pt = uv_dis
-            same_dir = True
+            vec_dot = 1
             if dir_pt != (0, 0):
                 img_vx, img_vy = dir_pt[0]-u, dir_pt[1]-v
-                print("img_vx, img_vy", img_vx, img_vy)
-                print("vx*vx, vy*vy", vx*img_vx, vy*img_vy)
-                if vx*img_vx>=0 and vy*img_vy>=0:
-                    same_dir = True
-                else:
-                    same_dir = False
+                # print("img_vx, img_vy", img_vx, img_vy)
+                # print("vx*vx, vy*vy", vx*img_vx, vy*img_vy)
+                vec_dot = vx*img_vx+vy*img_vy
+                # print("dot", vec_dot)
+
             error = math.sqrt((px-u)**2+(py-v)**2+((real_dis-fake_dis)*100)**2)
             # print("pts error", error)
-            if not mmwavePts_within_bbox(px, py, tlwh) or error > error_threshold or not same_dir : # # return "True" if mmwave pt within bbox
+            if not mmwavePts_within_bbox(px, py, tlwh) or error > error_threshold or vec_dot<=0 : # # return "True" if mmwave pt within bbox
                 row_error_matrix.append(100000.0) # not match, the pt out of bbox
                 continue
             # print("real_dis-fake_dis", real_dis-fake_dis)
             row_error_matrix.append(error)
-        print()
+        # print()
         error_matrix.append(row_error_matrix)
     
     return error_matrix # # row: mmwave, col: img(camera)

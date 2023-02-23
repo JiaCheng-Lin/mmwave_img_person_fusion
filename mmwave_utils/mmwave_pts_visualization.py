@@ -76,13 +76,62 @@ def gen_background(coor_size):
     # cv2.imshow("bg", im)
     cv2.imwrite("mmwave_bg.png", im)
     # cv2.waitKey(0)
+
+# another version of gen_background, rotate 180 degree.
+# # generate a coordinate background for pts visualization.
+def gen_background_1(coor_size):
+    h, w, _ = coor_size # (600, 800, 3)
     
+    # # using cv2 circle, line to draw coordinates.
+    im = 255*np.ones(coor_size, dtype=np.uint8) # new an image, dtype is important
+    origin_pt = (w//2, h-30)
+    line_color = (199, 195, 189)
+    font_color = (94, 73, 52, 0.1)
+    
+     # # draw FOV line (120 degree)
+    cv2.line(im, origin_pt, (0, int(origin_pt[1]-origin_pt[0]/np.sqrt(3))), (153, 187, 237)) # draw vertical axis line
+    cv2.line(im, origin_pt, (w, int(origin_pt[1]-origin_pt[0]/np.sqrt(3))), (153, 187, 237)) # draw vertical axis line
+    
+    cv2.putText(im, "0", (origin_pt[0]+2, origin_pt[1]-3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, font_color, 1, cv2.LINE_AA)
+    cv2.line(im, (origin_pt[0], 0), (origin_pt[0], h), line_color, 1) # draw y axis line
+    cv2.line(im, (0, origin_pt[1]), (w, origin_pt[1]), line_color, 1) # draw x axis line
+    cv2.circle(im, origin_pt, 5, (0, 0, 255), -1) # draw origin_pt
+
+    # # draw coordinates lines, pts
+    l, r = origin_pt[0], origin_pt[0]
+    gap = 60 # each pts dis: 60 pixels
+    cnt = 1
+    while l>=0 and r<=w: # draw vertical axis, x axis pt
+        l = origin_pt[0] + -1 * gap * cnt
+        r = origin_pt[0] + gap * cnt
+
+        cv2.line(im, (l, 0), (l, h), line_color) # draw vertical axis line
+        cv2.line(im, (r, 0), (r, h), line_color) # draw vertical axis line
+        cv2.putText(im, "-"+str(cnt), (l+2, origin_pt[1]-3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, font_color, 1, cv2.LINE_AA)
+        cv2.putText(im, str(cnt), (r+2, origin_pt[1]-3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, font_color, 1, cv2.LINE_AA)
+
+        cnt+=1
+
+    y = origin_pt[1]
+    cnt = 1
+    while y>=0: # draw horizontal axis, y axis pt
+        y = origin_pt[1] - gap * cnt
+
+        cv2.line(im, (0, y), (w, y), line_color) # draw vertical axis line
+        cv2.putText(im, str(cnt), (origin_pt[0]+2, y-3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, font_color, 1, cv2.LINE_AA)
+
+        cnt+=1
+   
+    # cv2.imshow("bg", im)
+    # cv2.waitKey(0)
+    
+    cv2.imwrite("mmwave_bg_1.png", im)
 
 # # using opencv to draw, fast, spend about 0.001s per frame
 def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: mmwave json
     # start = datetime.now() ### time
     h, w, _ = coor_size # default coor_size: (600, 800, 3) 
-    origin_pt = np.array((w//2, 30))
+    origin_pt = np.array((w//2, h-30))
     gap = 60 # default pts dis: 60 pixels/meter
 
     # show origin points
@@ -92,7 +141,7 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
         # print(xy_list)
 
         for px, py, ID, pt_color, Vx, Vy in xy_list:
-            bg_pt = (origin_pt + (px*gap, py*gap)).astype(int)
+            bg_pt = (origin_pt + (px*gap, -py*gap)).astype(int)
             cv2.circle(bg, bg_pt, 4, pt_color, -1) # use the distinguish color from xy_list[3]
 
             # draw direction arrow
@@ -111,7 +160,7 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
     # show matched points
     else: 
         for px, py, ID, pt_color in xy_list:
-            bg_pt = (origin_pt + (px*gap, py*gap)).astype(int)
+            bg_pt = (origin_pt + (px*gap, -py*gap)).astype(int)
             cv2.circle(bg, bg_pt, 4, pt_color, -1) # use the distinguish color from xy_list[3]
             
             dis = round(np.sqrt(px**2+py**2), 3)
@@ -135,7 +184,7 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
 def draw_mmwave_pts_sync(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: mmwave json
     # start = datetime.now() ### time
     h, w, _ = coor_size # default coor_size: (600, 800, 3) 
-    origin_pt = np.array((w//2, 30))
+    origin_pt = np.array((w//2, h-30))
     gap = 60 # default pts dis: 60 pixels/meter
 
     # show origin points
@@ -145,30 +194,31 @@ def draw_mmwave_pts_sync(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # da
         # print(xy_list)
 
         for px, py, ID, pt_color, Vx, Vy in xy_list:
-            bg_pt = (origin_pt + (px*gap, py*gap)).astype(int)
+            
+            bg_pt = (origin_pt + (-px*gap, -py*gap)).astype(int)
             cv2.circle(bg, bg_pt, 4, (255, 0, 255), -1) # use the distinguish color from xy_list[3]
 
             # draw direction arrow
-            Vx *= -1
+            Vx, Vy = -Vx, -Vy # It is opposite to the data direction given by the app 
             Vx, Vy = Vx/math.sqrt((Vx**2+Vy**2))*20, Vy/(math.sqrt(Vx**2+Vy**2))*20
-            end_point = bg_pt + (int(-Vx), int(Vy))
+            end_point = bg_pt + (int(Vx), int(Vy))
             # print(bg_pt, end_point)
             cv2.arrowedLine(bg, bg_pt, end_point, (0, 255, 0), 3)
 
             # write pos info
             dis = round(np.sqrt(px**2+py**2), 3)
-            info = str(ID)+" ("+str(px)+", "+str(py)+") "+str(dis)
+            info = str(ID)+" ("+str(-px)+", "+str(py)+") "+str(dis)
             cv2.putText(bg, info, (bg_pt[0]+5, bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.7, (84, 153, 34), 1, cv2.LINE_AA)
 
             
     # show matched points
     else: 
         for px, py, ID, pt_color in xy_list:
-            bg_pt = (origin_pt + (px*gap, py*gap)).astype(int)
+            bg_pt = (origin_pt + (-px*gap, -py*gap)).astype(int)
             cv2.circle(bg, bg_pt, 4, pt_color, -1) # use the distinguish color from xy_list[3]
             
             dis = round(np.sqrt(px**2+py**2), 3)
-            info = str(ID)+" ("+str(px)+", "+str(py)+") "+str(dis)
+            info = str(ID)+" ("+str(-px)+", "+str(py)+") "+str(dis)
             cv2.putText(bg, info, (bg_pt[0]+5, bg_pt[1]-2), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.7, (84, 153, 34), 1, cv2.LINE_AA)
 
     return bg
@@ -255,18 +305,20 @@ def plot_xy(xy_list):
     
 
 if __name__ == "__main__":
-    # json data
-    data = {"TimeStamp": "09:44:02:180", "Detection": "2", \
-            "JsonTargetList": [{"ID": 0, "Px": 6.2, "Py": 1.69, "Vx": 0.81, "Vy": 0.77, "Vrel": 0.79, "Ax": 1.14, "Ay": -0.02, "Arel": 0}, \
-                            {"ID": 1, "Px": 9.91, "Py": 3.82, "Vx": -0.88, "Vy": -0.84, "Vrel": 0, "Ax": -1.17, "Ay": -0.01, "Arel": 0}]}
 
-    # # get data
-    # xy_list = process_json_data(data)
-    # data = plot_xy(xy_list) # this way too slow to use (plt save)
+    gen_background_1((600, 800, 3))
+    # # json data
+    # data = {"TimeStamp": "09:44:02:180", "Detection": "2", \
+    #         "JsonTargetList": [{"ID": 0, "Px": 6.2, "Py": 1.69, "Vx": 0.81, "Vy": 0.77, "Vrel": 0.79, "Ax": 1.14, "Ay": -0.02, "Arel": 0}, \
+    #                         {"ID": 1, "Px": 9.91, "Py": 3.82, "Vx": -0.88, "Vy": -0.84, "Vrel": 0, "Ax": -1.17, "Ay": -0.01, "Arel": 0}]}
 
-    # # new way
-    # gen_background(coor_size=(600, 800, 3))
-    bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
-    mmwave_visual = draw_mmwave_pts(bg, data, coor_size=(600, 800, 3)) # draw by opencv
+    # # # get data
+    # # xy_list = process_json_data(data)
+    # # data = plot_xy(xy_list) # this way too slow to use (plt save)
+
+    # # # new way
+    # # gen_background(coor_size=(600, 800, 3))
+    # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
+    # mmwave_visual = draw_mmwave_pts(bg, data, coor_size=(600, 800, 3)) # draw by opencv
 
 
