@@ -360,39 +360,26 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     new_frame_time = 0
 
     ## save path for image & mmwave
-    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    timestamp = "20230306_230319"
     abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\img_mmwave_data/"
-    save_path = abs_path+'{}'.format(timestamp)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    save_idx = 0
+    data_dir = abs_path+'{}'.format(timestamp)
 
-    while True:
-        # if frame_id % 20 == 0:
-        #     logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
-        ret_val, frame = cap.read()
-        # cv2.imshow('frame', frame)
+    for filename in os.listdir(data_dir):
 
-        if ret_val:
-            
+        if filename.startswith("image_"):
+
+            img_path = os.path.join(data_dir, filename)
+            frame = cv2.imread(img_path)
+
+            mmwave_filename = f"mmwave{filename[5:-4]}.json" # get mmwave name 
+            mmwave_path = os.path.join(data_dir, mmwave_filename)
+
+            ## get mmwave data
+            with open(mmwave_path, 'r') as f:
+                sync_mmwave_json = json.load(f)
+
             # # image process: get bbox and id of each person; person detection and tracking, about 0.1s per frame
             outputs, img_info = predictor.inference(frame, timer)
-
-            ## time error calculation between mmwave and webcam
-            img_t = datetime.now().time()
-            mmwave_t = datetime.strptime(mmwave_json['TimeStamp'], "%H:%M:%S:%f").time()
-            time_error = cal_time_error(img_t, mmwave_t)
-            # if time_error > 0.1:
-            #     print("t>0.1", time_error, img_t, mmwave_t)
-            #     break
-
-            ##  mmwave data Time Synchronization before image process
-            # ori_mmwave_json = copy.deepcopy(mmwave_json) # for comparison with sync
-            sync_mmwave_json = mmwave_time_sync(mmwave_json, pre_mmwave_json, time_error)
-
-            ## save Data (img & mmwave)
-            saveData(frame, sync_mmwave_json, save_path, save_idx) 
-            save_idx += 1
 
             ## mmwave pts visualization by OpenCV, time consume: about 1ms. 
             bg_copy = copy.deepcopy(bg)
@@ -567,13 +554,13 @@ def main(exp, args):
         trt_file = None
         decoder = None
     
-    """ receive mmwave data """
-    udp_socket = socket(AF_INET, SOCK_DGRAM)
-    udp_socket.bind(("0.0.0.0", 6000)) # ip and port of jorjin mmwave app
-    BUFSIZE = 2048
-    # # Add a thread for receiving data from mmwave radar
-    threading.Thread(target=receive_data, args=(udp_socket, BUFSIZE), daemon=True).start()
-    """ receive mmwave data """
+    # """ receive mmwave data """
+    # udp_socket = socket(AF_INET, SOCK_DGRAM)
+    # udp_socket.bind(("0.0.0.0", 6000)) # ip and port of jorjin mmwave app
+    # BUFSIZE = 2048
+    # # # Add a thread for receiving data from mmwave radar
+    # threading.Thread(target=receive_data, args=(udp_socket, BUFSIZE), daemon=True).start()
+    # """ receive mmwave data """
 
     predictor = Predictor(model, exp, trt_file, decoder, args.device, args.fp16)
     current_time = time.localtime()

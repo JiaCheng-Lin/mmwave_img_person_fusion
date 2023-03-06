@@ -180,15 +180,15 @@ def process_mmwave(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regressor=Non
         reg_u_RA, reg_v_RA = int(reg_uv_RA[0][0]), int(reg_uv_RA[0][1])
         '''
 
-        ### convert by intrinsic parameters
+        # ### convert by intrinsic parameters
         # camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
         # mtx = np.array(camera_params['K'])
         # dist = np.array(camera_params['dist'])
-        # points_2d = cv2.projectPoints(np.array([-px, -0.5, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
+        # points_2d = cv2.projectPoints(np.array([-px, -300, py+100]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
         # # print(tuple(points_2d.flatten()))
         # a = points_2d.flatten()
         # print(a)
-        # cv2.circle(im0, (int(a[0]), int(a[1])), 2, (0,255,255), 5) # 
+        # cv2.circle(im0, (int(a[0]), int(a[1])), 2, (0,0,0), 5) # 
 
 
         # print("transform", corresponding_u, corresponding_v)
@@ -267,6 +267,17 @@ def process_mmwave_sync(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regresso
             0.8, (0, 255, 0), 1, cv2.LINE_AA)
 
         xy_list.append([reg_u, reg_v, real_dis, ID, px, py, vx, vy])
+
+
+        ### test convert by intrinsic parameters
+        camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
+        mtx = np.array(camera_params['K'])
+        dist = np.array(camera_params['dist'])
+        points_2d = cv2.projectPoints(np.array([-px, -0.05, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
+        # print(tuple(points_2d.flatten()))
+        a = points_2d.flatten()
+        print(a)
+        cv2.circle(im0, (int(a[0]), int(480-a[1])), 2, (0,0,0), 5) # 
 
     return im0, xy_list
 
@@ -355,7 +366,8 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
         l, t, _, _ = map(int, center_pt_list[j][4]) # map all para to int type
         _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[i]
         
-        cv2.putText(im0, str(ID_mmwave)+" "+str(real_dis), (l+20, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(im0, "-"+str(ID_mmwave)+" ", (l+20, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 1, cv2.LINE_AA)
+        # cv2.putText(im0, str(real_dis), (l+50, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
 
         new_mmwave_pts_list.append([px, py, ID_mmwave, (232, 229, 26)]) # give green color for vis to distinguish
         ID_matches.append([ID_mmwave, ID_img, px, py]) # save for previous ID matches

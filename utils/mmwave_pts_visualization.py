@@ -136,7 +136,7 @@ def draw_mmwave_pts(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # data: m
 
     # show origin points
     if len(xy_list) == 0 and data: # data(json file) exists.
-        # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
+        # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils/mmwave_bg.png")
         xy_list = process_json_data(data) # [[px, py, ID], ... ], px, py: ... meter
         # print(xy_list)
 
@@ -189,7 +189,7 @@ def draw_mmwave_pts_sync(bg, data={}, coor_size=(600, 800, 3), xy_list=[]): # da
 
     # show origin points
     if len(xy_list) == 0 and data: # data(json file) exists.
-        # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
+        # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils/mmwave_bg.png")
         xy_list = process_json_data(data) # [[px, py, ID], ... ], px, py: ... meter
         # print(xy_list)
 
@@ -318,7 +318,7 @@ if __name__ == "__main__":
 
     # # # new way
     # # gen_background(coor_size=(600, 800, 3))
-    # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\mmwave_utils/mmwave_bg.png")
+    # bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils/mmwave_bg.png")
     # mmwave_visual = draw_mmwave_pts(bg, data, coor_size=(600, 800, 3)) # draw by opencv
 
 
