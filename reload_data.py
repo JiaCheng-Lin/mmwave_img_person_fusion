@@ -37,6 +37,11 @@ from sklearn.pipeline import make_pipeline
 ## save data
 from utils.save_data import *
 
+
+## load regression model
+from load_regression_model import *
+
+
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
 
@@ -352,7 +357,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils/mmwave_bg_1.png")
     
     # # regression model initialization (mmwave pts project to img)
-    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_02_16_14_31_32.joblib') 
+    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_03_09_13_05_11.joblib') 
     t_total = 0 # time_error_sum
     t_cnt = 0 # time count
 
@@ -360,9 +365,24 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     new_frame_time = 0
 
     ## save path for image & mmwave
-    timestamp = "20230306_230319"
+    folderName = "20230418_145353"  
     abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\img_mmwave_data/"
-    data_dir = abs_path+'{}'.format(timestamp)
+    data_dir = abs_path+'{}'.format(folderName)
+
+    ## count the number of unmatch bbox(person)
+    non_match_bbox = 0
+    total_bbox = 0
+
+    # count the number of ID Switch
+    id_switch = 0
+
+    ## save bbox video
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output.avi', fourcc, 10.0, (640,  480))
+
+    # load regression model
+    regression_model = get_regression_model()
+    
 
     for filename in os.listdir(data_dir):
 
@@ -428,6 +448,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             # start = datetime.now()
             # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            online_im, _= process_mmwave_regression(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regression_model=regression_model)
             # end = datetime.now()  
             # print("Transform time", (end-start).total_seconds()) # about 1ms.
 
@@ -436,7 +457,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
             if outputs[0] is not None:
                 # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
-                online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(estimated_uv_list, new_center_pt_list, online_im, previous_ID_matches)
+                online_im, new_mmwave_pts_list, previous_ID_matches, non_match_bbox, total_bbox = pt_match_valid(estimated_uv_list, new_center_pt_list, online_im, non_match_bbox, total_bbox, previous_ID_matches)
 
                 ### after match, show a new mmwave_pt_visual
                 new_bg_copy = copy.deepcopy(bg)
@@ -450,12 +471,28 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     origin_vid_writer.write(frame)
             cv2.imshow("online_im", online_im)
             ch = cv2.waitKey(1)
+            # if ch == ord("a") or ch == ord("A"):
+            #     non_match_bbox+=1
+            
+            # out.write(online_im) # save video after obj detection
+
+            # ## count the number of id switch
+            # if ch >= 49 and ch <= 57:
+            #     id_switch += int(ch)-48
+            #     print("id_switch", id_switch)
+
             if ch == 27 or ch == ord("q") or ch == ord("Q"):
+                # print("non_match", non_match_bbox)
+                # print("total", total_bbox)
                 break
 
         else:
             break
         frame_id += 1
+
+    # print("non_match", non_match_bbox)
+    # print("total", total_bbox)
+        
 
     if args.save_result:
         res_file = osp.join(vis_folder, f"{timestamp}.txt")

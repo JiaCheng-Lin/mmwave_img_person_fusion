@@ -346,13 +346,13 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # mmwave_json = pre_mmwave_json = None # initialize mmwave_json data
     pre_center_pt_list = []
     center_pt_list = []
-    previous_ID_matches  = [] # record previous ID matches
+    ID_matches  = [] # record ID matches
 
     # # read mmwave background image
     bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils/mmwave_bg_1.png")
     
     # # regression model initialization (mmwave pts project to img)
-    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_02_16_14_31_32.joblib') 
+    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_03_09_13_05_11.joblib') 
     t_total = 0 # time_error_sum
     t_cnt = 0 # time count
 
@@ -449,7 +449,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
             if outputs[0] is not None:
                 # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
-                online_im, new_mmwave_pts_list, previous_ID_matches = pt_match(estimated_uv_list, new_center_pt_list, online_im, previous_ID_matches)
+                online_im, new_mmwave_pts_list, ID_matches = pt_match(estimated_uv_list, new_center_pt_list, online_im, ID_matches)
 
                 ### after match, show a new mmwave_pt_visual
                 new_bg_copy = copy.deepcopy(bg)

@@ -17,6 +17,12 @@ from sklearn.pipeline import make_pipeline
 
 import copy
 
+# load regression model file
+import sys
+sys.path.append('../')
+from load_regression_model import *
+
+
 
 ## old version, abandon later, (20230209)
 ## Because of the change from single-threaded to dual-threaded
@@ -269,18 +275,65 @@ def process_mmwave_sync(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regresso
         xy_list.append([reg_u, reg_v, real_dis, ID, px, py, vx, vy])
 
 
-        ### test convert by intrinsic parameters
-        camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
-        mtx = np.array(camera_params['K'])
-        dist = np.array(camera_params['dist'])
-        points_2d = cv2.projectPoints(np.array([-px, -0.05, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
-        # print(tuple(points_2d.flatten()))
-        a = points_2d.flatten()
-        print(a)
-        cv2.circle(im0, (int(a[0]), int(480-a[1])), 2, (0,0,0), 5) # 
+        # ### test convert by intrinsic parameters
+        # camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
+        # mtx = np.array(camera_params['K'])
+        # dist = np.array(camera_params['dist'])
+        # points_2d = cv2.projectPoints(np.array([-px, -0.05, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
+        # # print(tuple(points_2d.flatten()))
+        # a = points_2d.flatten()
+        # print(a)
+        # cv2.circle(im0, (int(a[0]), int(480-a[1])), 2, (0,0,0), 5) # 
 
     return im0, xy_list
 
+
+# test regression model
+def process_mmwave_regression(mmwave_json, im0, origin_px=6.0, origin_py=1.0, regression_model=None): # # origin_px/py: jorjin Device original point 
+
+    xy_list = [] # px, py, real_dis list in single frame
+    detection = int(mmwave_json["Detection"]) # # number of person
+    for i in range(detection): 
+
+        # print("Vx, Vy: ", , mmwave_json["JsonTargetList"][i]["Vy"])
+
+        # px = px*-1 <= flip horizontally because jorjinMMWave device app "display" part
+        ID, px, py, vx, vy = mmwave_json["JsonTargetList"][i]["ID"], \
+                    round(mmwave_json["JsonTargetList"][i]["Px"]-origin_px, 5), \
+                    round(mmwave_json["JsonTargetList"][i]["Py"]-origin_py, 5), \
+                    mmwave_json["JsonTargetList"][i]["Vx"], \
+                    mmwave_json["JsonTargetList"][i]["Vy"]
+        
+        ### predict by sklearn, polynominal regression
+        # reg_uv = regressor.predict(np.array([[px, py]])) # origin 
+        # reg_u, reg_v = int(reg_uv[0][0]), int(reg_uv[0][1])
+        test_dataset = cam_mmw(np.array([[px, py]]))
+        test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False, pin_memory=True)
+        preds = predict(test_loader, regression_model, "cuda") 
+
+        reg_u, reg_v = preds[0]
+        cv2.circle(im0, (int(reg_u), int(reg_v)), 2, (0, 0, 0), 5) 
+        # cv2.circle(im0, (reg_u_RA, reg_v_RA), 2, (255, 0, 0), 5) # blue
+        
+        # # vis: show the "mmwave dis" at the estimated uv pos in img
+        real_dis = round(np.sqrt(px**2+py**2), 5)
+        # cv2.putText(im0, str(real_dis), (int(reg_u), int(reg_v)+20), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+        #     0.8, (0, 255, 0), 1, cv2.LINE_AA)
+
+        xy_list.append([reg_u, reg_v, real_dis, ID, px, py, vx, vy])
+
+
+        # ### test convert by intrinsic parameters
+        # camera_params = np.load("../camera_calibration/getK/intrinsic_parameters/camera_parameters_202211240103.npy", allow_pickle=True)[()]
+        # mtx = np.array(camera_params['K'])
+        # dist = np.array(camera_params['dist'])
+        # points_2d = cv2.projectPoints(np.array([-px, -0.05, py]), np.array([0.0,0.0,0.0]), np.array([0.0,0.0, 0.0]), mtx, dist)[0]
+        # # print(tuple(points_2d.flatten()))
+        # a = points_2d.flatten()
+        # print(a)
+        # cv2.circle(im0, (int(a[0]), int(480-a[1])), 2, (0,0,0), 5) # 
+
+    return im0, xy_list
 
 
 # return "True" if mmwave pt within bbox 
@@ -356,6 +409,8 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
     # print("unmatched_mmwave", unmatched_mmwave)
     # print("unmatched_img", unmatched_img)
 
+    
+
     """ for Matched pts""" # the best situation
     new_mmwave_pts_list = []
     ID_matches = []
@@ -369,7 +424,7 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
         cv2.putText(im0, "-"+str(ID_mmwave)+" ", (l+20, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 1, cv2.LINE_AA)
         # cv2.putText(im0, str(real_dis), (l+50, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
 
-        new_mmwave_pts_list.append([px, py, ID_mmwave, (232, 229, 26)]) # give green color for vis to distinguish
+        new_mmwave_pts_list.append([px, py, str(ID_img)+"_"+str(ID_mmwave), (232, 229, 26)]) # give green color for vis to distinguish
         ID_matches.append([ID_mmwave, ID_img, px, py]) # save for previous ID matches
 
     # print("ID_matches", ID_matches)
@@ -392,7 +447,7 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
             if ID_img in unmatched_img_ID:
                 # print("find!!!!!!!!!!!!!!")
                 ID_matches.append([ID_mmwave, ID_img, px, py]) # add to previous matches, record
-                new_mmwave_pts_list.append([px, py, ID_mmwave, (0, 143, 255)]) # add to mmwave visualization
+                new_mmwave_pts_list.append([px, py, str(ID_img)+"_"+str(ID_mmwave), (0, 143, 255)]) # add to mmwave visualization
                 # give orange color for vis to distinguish
 
                 # # if find the previous ID matched, 
@@ -416,3 +471,83 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
     # print("new_mmwave_pts_list", new_mmwave_pts_list)
 
     return im0, new_mmwave_pts_list, ID_matches
+
+
+# # xy_list: mmwave list, [corresponding_u, corresponding_v, real_dis, ID, px, py]
+# # center_pt_list: img list, [center_pt_x, center_pt_y, fake_dis, ID, tlwh]
+def pt_match_valid(xy_list, center_pt_list, im0, unmatched_bbox, total_bbox, previous_ID_matches=[]):
+    total_bbox += len(center_pt_list)
+    
+    ## get error matrix between xy_list(mmwave) and center_pt_list(camera)
+    error_matrix = getErrorMatrix(xy_list, center_pt_list, error_threshold=150)
+    # print(error_matrix)
+
+    # # linear_assignment problem, match the N x M matrix, ref: https://github.com/gatagat/lap
+    # # get the minimum sum of weight, using lap.lapjv to solve it.
+    matches, unmatched_mmwave, unmatched_img = linear_assignment(np.array(error_matrix))
+    # print("matches", matches) # idx matches
+    # print("unmatched_mmwave", unmatched_mmwave)
+    # print("unmatched_img", unmatched_img)
+
+    """ for Matched pts""" # the best situation
+    new_mmwave_pts_list = []
+    ID_matches = []
+    for i, j in matches:
+        # print("real_dis, fake_dis, diff",xy_list[i][2], center_pt_list[j][2], xy_list[i][2]-center_pt_list[j][2])
+
+        ID_img = int(center_pt_list[j][3])
+        l, t, _, _ = map(int, center_pt_list[j][4]) # map all para to int type
+        _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[i]
+        
+        cv2.putText(im0, "-"+str(ID_mmwave)+" ", (l+20, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 1, cv2.LINE_AA)
+        # cv2.putText(im0, str(real_dis), (l+50, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
+
+        new_mmwave_pts_list.append([px, py, str(ID_img)+"_"+str(ID_mmwave), (232, 229, 26)]) # give green color for vis to distinguish
+        ID_matches.append([ID_mmwave, ID_img, px, py]) # save for previous ID matches
+
+    # print("ID_matches", ID_matches)
+    
+    # print("previous_ID_matches", previous_ID_matches)
+
+
+    """ unmatched problem: "Person Stopped", mmwave pt will disappear
+         person in img and exists previous pos.""" 
+    # # process the unmatched img person but matched before 
+
+    # one/more person with no mmwave pos. (no mmwave data to match, so unmatch_img will be empty)
+    if len(xy_list) == 0 and len(center_pt_list)!=0: 
+        unmatched_img = [i for i in range(len(center_pt_list))]
+    if len(unmatched_img)!=0: # unmatched_img idx
+        unmatched_bbox += len(unmatched_img)
+        for ID_mmwave, ID_img, px, py in previous_ID_matches:
+            unmatched_img_ID = np.array(center_pt_list, dtype=object)[unmatched_img][:, 3]
+            # print("ID_img", ID_img)
+            # print("unmatched_img_ID", unmatched_img_ID)
+            if ID_img in unmatched_img_ID:
+                # print("find!!!!!!!!!!!!!!")
+                ID_matches.append([ID_mmwave, ID_img, px, py]) # add to previous matches, record
+                new_mmwave_pts_list.append([px, py, str(ID_img)+"_"+str(ID_mmwave), (0, 143, 255)]) # add to mmwave visualization
+                # give orange color for vis to distinguish
+
+                # # if find the previous ID matched, 
+                # # so need to "delete" corresponding idx from "unmatched_mmwave"
+                for i, idx in enumerate(unmatched_mmwave):
+                    if ID_mmwave == xy_list[idx][3]:
+                        unmatched_mmwave = np.delete(unmatched_mmwave, i)
+                        break
+
+    """camera can not capture person, but mmwave has pts""" # use mmwave original pt, just show it 
+    # # solve the person out of view (camera can not capture, but mmwave can)
+    if len(xy_list) != 0 and len(center_pt_list)==0:  # # no person 
+        unmatched_mmwave = [i for i in range(len(xy_list))]
+    # # if unmatched mmwave exists, just show it 
+    if len(unmatched_mmwave)!=0: # unmatched_mmwave idx
+        for idx in unmatched_mmwave:
+            _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[idx]
+            new_mmwave_pts_list.append([px, py, ID_mmwave, (0, 0, 0)])  # add to mmwave visualization
+            # give black color for vis to distinguish
+    
+    # print("new_mmwave_pts_list", new_mmwave_pts_list)
+
+    
+    return im0, new_mmwave_pts_list, ID_matches, unmatched_bbox, total_bbox
