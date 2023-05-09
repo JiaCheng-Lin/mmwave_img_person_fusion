@@ -17,11 +17,6 @@ from sklearn.pipeline import make_pipeline
 
 import copy
 
-# load regression model file
-import sys
-sys.path.append('../')
-from load_regression_model import *
-
 
 
 ## old version, abandon later, (20230209)

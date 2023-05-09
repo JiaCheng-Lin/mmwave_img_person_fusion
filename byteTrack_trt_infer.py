@@ -37,6 +37,10 @@ from sklearn.pipeline import make_pipeline
 ## save data
 from utils.save_data import *
 
+# MMW vis
+sys.path.append(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils")
+from MMW import MMW
+
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
 
@@ -273,6 +277,8 @@ def distance_finder(focal_length, real_object_width, width_in_frame): # fake dis
 
 def get_center_pt_list(online_im, online_ids, online_tlwhs):
     center_pt_list = [] # [[centerPt_u, centerPt_v, fake_dis, ID_img], ]
+    tmp_pt_list = [] # for perspective transform
+    regression_pt_list = [] # for regression model(bbox to MMW)
     for idx, tlwh in enumerate(online_tlwhs):
         center_pt_x, center_pt_y = int(tlwh[0]+tlwh[2]/2), int(tlwh[1]+tlwh[3]/2)
         bottom_pt = int(tlwh[1]+tlwh[3])-20
@@ -288,8 +294,10 @@ def get_center_pt_list(online_im, online_ids, online_tlwhs):
         # add to list
         # center_pt_list.append([center_pt_x, bottom_pt, fake_dis, online_ids[idx], tlwh])
         center_pt_list.append([center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh])
+        tmp_pt_list.append([center_pt_x, int(tlwh[1]+tlwh[3]), online_ids[idx]])
+        regression_pt_list.append([center_pt_x, int(tlwh[1]+tlwh[3]), tlwh[2], tlwh[3], online_ids[idx]])
 
-    return center_pt_list, online_im
+    return center_pt_list, online_im, tmp_pt_list, regression_pt_list
 
 ### Need to improve code 
 def draw_frame_arrow(pre, cur, img):
@@ -322,8 +330,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     cap = cv2.VideoCapture(args.path if args.demo == "video" else args.camid)
     # width = 960 # cap.get(cv2.CAP_PROP_FRAME_WIDTH)  # float
     # height = 540 # cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 2000)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 2000)
+    # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 2000)
+    # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 2000)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) 
 
@@ -372,18 +380,12 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         os.makedirs(save_path)
     save_idx = 0
 
-    ### load RootNet & poseNet model
-    from utils.RootNet import RootNetInit, getDepthFromRootNet
-    rootNetModel, transform = RootNetInit() # load rootNet model
+    # # ### load RootNet & poseNet model
+    # from utils.RootNet import RootNetInit, getDepthFromRootNet
+    # rootNetModel, transform = RootNetInit() # load rootNet model
     
-    from utils.PoseNet import PoseNetInit, getSkeletonFromPoseNet
-    poseNetModel, transform = PoseNetInit() # load poseNet model
-    
-    import matplotlib.pyplot as plt
-    from matplotlib.animation import FuncAnimation
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
+    # from utils.PoseNet import PoseNetInit, getSkeletonFromPoseNet
+    # poseNetModel, transform = PoseNetInit() # load poseNet model
 
     # # load mediapipe model
     # import mediapipe as mp
@@ -391,6 +393,16 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # from utils.PoseMediapipe import getPoseFromMediapipe
     # mp_drawing = mp.solutions.drawing_utils
     # mp_pose = mp.solutions.pose
+    
+    # # load perspective transform 
+    # transormation_matrix = np.array(np.load("./utils/perspectiveTransformation/transformation_matrix.npy"), np.float32) # use calibrate.py to define the trans mtx.
+    # destination_size = (600, 400) # warped image size
+    # from utils.perspectiveTransformation.bird_eye import bird_eye_transform
+
+    # load regression model
+    import utils.load_regression_model as LRM
+    model_name = "model_20230509_0.136.ckpt"
+    regression_model = LRM.get_regression_model(model_name)
 
     while True:
         # if frame_id % 20 == 0:
@@ -453,26 +465,43 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 if center_pt_list:
                     pre_center_pt_list = center_pt_list
 
-                center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
+                center_pt_list, online_im, tmp_pt_list, regression_pt_list = get_center_pt_list(online_im, online_ids, online_tlwhs)# tmp_pt_list: for perspective transform
 
                 # Draw the direction of each person's center point between frames. 
                 new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
                 # print("new center pt", new_center_pt_list) # center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
 
 
-                # """ rootNet Estimation """
+                # # """ rootNet Estimation """
                 # online_im, root_depth_list = getDepthFromRootNet(rootNetModel, online_im, online_tlwhs, transform, original_img_height=height, original_img_width=width)
                 
-                # """ poseNet Estimation """
-                # # ax.clear()
-                # online_im, fig = getSkeletonFromPoseNet(poseNetModel, online_im, online_tlwhs, root_depth_list, transform, fig, ax, original_img_height=height, original_img_width=width)
+                # # """ poseNet Estimation """
+                # online_im = getSkeletonFromPoseNet(poseNetModel, online_im, online_tlwhs, root_depth_list, transform, original_img_height=height, original_img_width=width)
                 
-                # fig.canvas.draw()
-                # plt.pause(0.0000001)
-
                 # """ mediapipe pose estimation """ Not Work
                 # online_im = getPoseFromMediapipe(mp_pose, mp_drawing, online_im, online_tlwhs)
 
+                # ## perspective transformation
+                # warped = cv2.warpPerspective(online_im, transormation_matrix, destination_size)
+                # bird_eye_img = bird_eye_transform(tmp_pt_list, transormation_matrix, H=1000, W=500)
+                # cv2.imshow("warped", warped)
+                # cv2.imshow("bird_eye_img", bird_eye_img)
+
+
+                ## pass data to regression model(bbox to MMW)
+                ## data: # [[bottom_x, bottom_y, w, h], [], ...]
+                t = datetime.now().time()
+                estimated_MMW = LRM.predict(regression_model, data=np.array(regression_pt_list)) 
+                t_error = cal_time_error(datetime.now().time(), t)
+                # print(t_error) # 0.001s
+                # print(estimated_MMW)
+
+                estimated_MMW_bg = copy.deepcopy(bg)
+                for i, (x, y) in enumerate(estimated_MMW):
+                    cam_id = regression_pt_list[i][-1] # bottom_x, bottom_y, w, h, id
+                    estimated_MMW_bg = MMW(x, y, cam_id).draw(estimated_MMW_bg, pt_color=(255, 0, 0), pt_size=3)
+                
+                cv2.imshow('estimated position',estimated_MMW_bg)
             else:
                 timer.toc()
                 online_im = img_info['raw_img']
@@ -503,6 +532,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 if args.demo == "webcam": 
                     origin_vid_writer.write(frame)
             cv2.imshow("online_im", online_im)
+            
+            
             # print("img shape",online_im.shape)
             ch = cv2.waitKey(1)
             if ch == 27 or ch == ord("q") or ch == ord("Q"):
@@ -599,7 +630,8 @@ def main(exp, args):
 
     if args.trt:
         assert not args.fuse, "TensorRT model is not support model fusing!"
-        trt_file = osp.join(output_dir, "model_trt.pth")
+        trt_file_name = str(args.exp_file.split('/')[-1][:-3])
+        trt_file = osp.join(r"C:\TOBY\jorjin\object_tracking\ByteTrack\YOLOX_outputs", trt_file_name, "model_trt.pth")
         assert osp.exists(
             trt_file
         ), "TensorRT model is not found!\n Run python3 tools/trt.py first!"

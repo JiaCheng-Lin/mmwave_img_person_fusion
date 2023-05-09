@@ -20,3 +20,6 @@ python process_mmw_ID.py webcam --camid 0 --fp16 --fuse
 
 byteTrack + RootNet: estimate the depth of each person:
 python byteTrack_RootNet.py webcam --camid 0 --fp16 --fuse
+
+using trt model -> more faster, 
+python byteTrack_trt_infer.py webcam --camid 0 --trt

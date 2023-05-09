@@ -42,7 +42,7 @@ def PoseNetInit():
 
 
 def getSkeletonFromPoseNet(model, online_im, online_tlwhs, root_depth_list, \
-                        transform, fig, ax, original_img_height=480, original_img_width=640, \
+                        transform, original_img_height=480, original_img_width=640, \
                         focal=[674.97055585, 674.97055585]): # focal: cal by zhang-calibatrion
     princpt = [original_img_width/2, original_img_height/2] # [304.6173947, 248.93570592] 
 
@@ -87,13 +87,14 @@ def getSkeletonFromPoseNet(model, online_im, online_tlwhs, root_depth_list, \
     
     # visualize 3d poses
     vis_kps = np.array(output_pose_3d_list)
+    np.save("./utils/vis_kps.npy", vis_kps)
     # print(vis_kps)
     # vis_3d_multiple_skeleton(vis_kps, np.ones_like(vis_kps), skeleton, 'output_pose_3d (x,y,z: camera-centered. mm.)')
     # fig = vis_3d_multiple_skeleton_realTime(fig, ax, vis_kps, np.ones_like(vis_kps), skeleton, 'output_pose_3d (x,y,z: camera-centered. mm.)')
 
     
 
-    return online_im, fig
+    return online_im
 
 
 

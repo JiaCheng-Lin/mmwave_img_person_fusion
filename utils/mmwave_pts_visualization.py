@@ -12,7 +12,7 @@ from datetime import datetime
 import math
 
 import sys
-sys.path.append("./utils")
+sys.path.append(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils")
 from MMW import MMW
 
 origin_px, origin_py = 6.0, 1.0 # jorjin mmwave UI

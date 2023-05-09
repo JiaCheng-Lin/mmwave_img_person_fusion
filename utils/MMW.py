@@ -26,8 +26,8 @@ class MMW(object):
         cv2.circle(bg_img, bg_pt, pt_size, pt_color, -1) 
 
         dis = round(np.sqrt(self.Px**2+self.Py**2), 3)
-        info = str(self.ID)# +" ("+str(-self.Px)+", "+str(self.Py)+") "+str(dis)
-        cv2.putText(bg_img, info, (bg_pt[0]+5, bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.7, (84, 153, 34), 1, cv2.LINE_AA)
+        info = str(self.ID) +" ("+str(round(-self.Px, 2))+", "+str(round(self.Py, 2))+") "#+str(dis)
+        cv2.putText(bg_img, info, (bg_pt[0]+5, bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
         
         if self.Vx and self.Vy:
             tmp_Vx, tmp_Vy = -self.Vx, -self.Vy # It is opposite to the data direction given by the app 
