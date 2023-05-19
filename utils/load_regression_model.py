@@ -19,8 +19,6 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 
 
-
-
 class cam_mmw(Dataset):
     '''
     x: Features.
@@ -42,7 +40,7 @@ class cam_mmw(Dataset):
     def __len__(self):
         return len(self.x)
 
-## regression model network
+## bbox to MMW(pixel to position) regression model network
 class bbox2MMW_Model(nn.Module):
     def __init__(self, input_dim):
         super(bbox2MMW_Model, self).__init__()
@@ -71,6 +69,33 @@ class bbox2MMW_Model(nn.Module):
         x = self.layers(x)
         x = x.squeeze(1) # (B, 1) -> (B)
         return x
+        
+# MMW to bbox(position to pixel) regression model network
+class MMW2bbox_Model(nn.Module):
+    def __init__(self, input_dim):
+        super(MMW2bbox_Model, self).__init__()
+        # TODO: modify model's structure, be aware of dimensions. 
+        self.layers = nn.Sequential(
+            nn.Linear(input_dim, 8),
+            nn.ReLU(),
+            
+            nn.Linear(8, 16),
+            nn.ReLU(),
+            
+            nn.Linear(16, 32),
+            nn.ReLU(),
+
+            nn.Linear(32, 8),
+            nn.ReLU(),
+            
+            nn.Linear(8, 2)
+
+        )
+
+    def forward(self, x):
+        x = self.layers(x)
+        x = x.squeeze(1) # (B, 1) -> (B)
+        return x
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -85,14 +110,19 @@ config = {
     'save_path': r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\regression_models/'  # Your model will be saved here.
 }
 
-def get_regression_model(model_name):
-    model = bbox2MMW_Model(input_dim=4).to('cuda')
+def get_bbox2MMW_regression_model(model_name, input_dim=4):
+    model = bbox2MMW_Model(input_dim=input_dim).to('cuda')
     model.load_state_dict(torch.load(config['save_path']+model_name))
 
     return model.eval()
 
+def get_MMW2bbox_regression_model(model_name, input_dim=6):
+    model = MMW2bbox_Model(input_dim=input_dim).to('cuda')
+    model.load_state_dict(torch.load(config['save_path']+model_name))
 
-def predict(model, data): # data: np array
+    return model.eval()
+
+def predict_pos(model, data): # data: np array, [[bottom_x, bottom_y, w, h, C_ID], ...]
     if data.size != 0:
         test_dataset =  cam_mmw(data[:, :-1]) # np.array([[104., 392.28721168, 105.26521565, 294.57442337]])
         test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False, pin_memory=True)
@@ -105,8 +135,47 @@ def predict(model, data): # data: np array
                 preds.append(pred.detach().cpu())   
         preds = torch.cat(preds, dim=0).numpy() 
 
-        return preds
+        return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with CAM ID 
     return []
+
+def predict_pixel(model, MMWs): # data: np array, [[px, py, vx, vy, ax, ay, M_ID], ...]
+    data = np.array([[a.Px, a.Py, a.Vx, a.Vy, a.Ax, a.Ay] for a in MMWs]) # [[px, py, vx, vy, ax, ay], ...]
+    if data.size != 0:
+        test_dataset =  cam_mmw(data) 
+        test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False, pin_memory=True)
+        
+        preds = []
+        for x in test_loader: # tqdm(test_loader):
+            x = x.to('cuda')                        
+            with torch.no_grad():                   
+                pred = model(x)                     
+                preds.append(pred.detach().cpu())   
+        preds = torch.cat(preds, dim=0).numpy() 
+
+        # print(preds, np.array([data[:, -1]]).T) 
+        
+        return preds
+
+        # return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with MMW ID
+    return []
+
+# def predict_pixel(model, data): # data: np array, [[px, py, vx, vy, ax, ay, M_ID], ...]
+#     if data.size != 0:
+#         test_dataset =  cam_mmw(data[:, :-1]) 
+#         test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False, pin_memory=True)
+        
+#         preds = []
+#         for x in test_loader: # tqdm(test_loader):
+#             x = x.to('cuda')                        
+#             with torch.no_grad():                   
+#                 pred = model(x)                     
+#                 preds.append(pred.detach().cpu())   
+#         preds = torch.cat(preds, dim=0).numpy() 
+
+#         # print(preds, np.array([data[:, -1]]).T) 
+
+#         return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with MMW ID
+#     return []
 
 # if __name__ == '__main__':
 

@@ -35,11 +35,11 @@ from sklearn.preprocessing import PolynomialFeatures # Polynomial
 from sklearn.pipeline import make_pipeline
 
 ## save data
-from utils.save_data import *
+from utils.save_data import saveData
 
 # MMW vis
 sys.path.append(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils")
-from MMW import MMW
+from MMW import MMW, json2MMWCls
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
@@ -299,7 +299,7 @@ def get_center_pt_list(online_im, online_ids, online_tlwhs):
 
     return center_pt_list, online_im, tmp_pt_list, regression_pt_list
 
-### Need to improve code 
+### Need to improve this code 
 def draw_frame_arrow(pre, cur, img):
     # pre, cur: [center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh]
     new_list = copy.deepcopy(cur)
@@ -312,7 +312,7 @@ def draw_frame_arrow(pre, cur, img):
                     Vx, Vy = x1-x2, y1-y2
                     dis = math.sqrt(Vx**2+Vy**2)
                     # print("dis: ", math.sqrt(Vx**2+Vy**2)) # person stand -> within about 10 pixel 
-                    if Vx == 0 and Vy == 0 or dis <= 5: # if dis<5 pixel, skip it
+                    if Vx == 0 and Vy == 0 or dis <= 5: # if dis<5 pixel, skip it -> maybe person still
                         break
 
                     Vx, Vy = Vx/math.sqrt((Vx**2+Vy**2))*20, Vy/(math.sqrt(Vx**2+Vy**2))*20  # normalize the length in fig
@@ -376,8 +376,6 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\img_mmwave_data/"
     save_path = abs_path+'{}'.format(timestamp)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
     save_idx = 0
 
     # # ### load RootNet & poseNet model
@@ -435,7 +433,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             sync_mmwave_json = mmwave_time_sync(mmwave_json, pre_mmwave_json, time_error)
 
             ## save Data (img & mmwave)
-            # saveData(frame, sync_mmwave_json, save_path, save_idx) 
+            saveData(frame, sync_mmwave_json, save_path, save_idx) 
             save_idx += 1
 
             ## mmwave pts visualization by OpenCV, time consume: about 1ms. 
@@ -443,6 +441,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             # mmwave_pt_visual = draw_mmwave_pts(bg_copy, ori_mmwave_json)
             mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
             # cv2.imshow("mmwave", mmwave_pt_visual)
+
 
             if outputs[0] is not None: # bbox exists
                 online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
@@ -474,42 +473,19 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
                 # Draw the direction of each person's center point between frames. 
                 new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
-                # print("new center pt", new_center_pt_list) # center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
-
-
-                # # """ rootNet Estimation """
-                # online_im, root_depth_list = getDepthFromRootNet(rootNetModel, online_im, online_tlwhs, transform, original_img_height=height, original_img_width=width)
-                
-                # # """ poseNet Estimation """
-                # online_im = getSkeletonFromPoseNet(poseNetModel, online_im, online_tlwhs, root_depth_list, transform, original_img_height=height, original_img_width=width)
-                
-                # """ mediapipe pose estimation """ Not Work
-                # online_im = getPoseFromMediapipe(mp_pose, mp_drawing, online_im, online_tlwhs)
-
-                # ## perspective transformation
-                # warped = cv2.warpPerspective(online_im, transormation_matrix, destination_size)
-                # bird_eye_img = bird_eye_transform(tmp_pt_list, transormation_matrix, H=1000, W=500)
-                # cv2.imshow("warped", warped)
-                # cv2.imshow("bird_eye_img", bird_eye_img)  
+                # new_center_pt_list: center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
 
 
                 """ DO Transform! (project bbox pts to MMW) """
                 ## pass data to regression model(bbox to MMW)
-                ## data: # [[bottom_x, bottom_y, w, h], [], ...]
-                # t = datetime.now().time()
+                ## data: # [[bottom_x, bottom_y, w, h], [], ...] -> [[Xr, Yr, C_ID], [], ...]
                 estimated_MMW = LRM.predict_pos(bbox2MMW_model, data=np.array(regression_pt_list)) 
-                # t_error = cal_time_error(datetime.now().time(), t)
-                # print(t_error) # 0.001s
-                # print(estimated_MMW)
-
                 # visualization new MMW (project bbox to MMW)
                 estimated_MMW_bg = copy.deepcopy(bg)
-                for i, (x, y) in enumerate(estimated_MMW):
-                    cam_id = regression_pt_list[i][-1] # bottom_x, bottom_y, w, h, id
-                    bg_copy = MMW(x, y, cam_id).draw(bg_copy, pt_color=(255, 0, 0), pt_size=3)
+                for x, y, C_ID in estimated_MMW:
+                    mmwave_pt_visual = MMW(x, y, C_ID).draw(mmwave_pt_visual, pt_color=(255, 0, 0), pt_size=3)
                 
-                cv2.imshow('estimated position',bg_copy)
-
+                cv2.imshow('estimated position',mmwave_pt_visual)
                 
 
             else:
@@ -518,31 +494,51 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
             """!!! mmwave process !!!"""
 
-            """ DO Transform! (project MMW pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
-            # start = datetime.now()
+            """ OLD Version: DO Transform! (project MMW pts to img) """ # xy_list: [[px, py, real_dis, ID], ], 
             # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-            # end = datetime.now()  
-            # print("Transform time", (end-start).total_seconds()) # about 1ms.
-            print("estimated_uv_list", estimated_uv_list)
+            # print("estimated_uv_list", estimated_uv_list) # [[reg_u, reg_v, real_dis, ID, px, py, vx, vy], ...]
 
+            """ NEW Version: DO Transform (project mmw pts to image) """ 
+            s = datetime.now() 
 
-            """ DO Transform (project mmw pts to image) """ 
-            mmw_regression_pts = get_mmwave_regression_pts(sync_mmwave_json) # process sync_mmwave_json first
-            estimated_pixels = LRM.predict_pixel(MMW2bbox_model, data=np.array(mmw_regression_pts)) # [[px, py, vx, vy, ax, ay], ...]
-            for x, y in estimated_pixels:
-                reg_u, reg_v = int(x), int(y)
-                # print((reg_u, reg_v))
-                cv2.circle(online_im, (reg_u, reg_v), 2, (204, 0, 204), 5) 
+            # mmw_regression_pts, MMWs = get_mmwave_regression_pts(sync_mmwave_json) # process data to MMW() class
+            MMWs = json2MMWCls(sync_mmwave_json)
+            
+            # print("inputs", inputs)
+            # print("mmw_regression_pts", mmw_regression_pts)
+            estimated_pixels = LRM.predict_pixel(MMW2bbox_model, MMWs)  ## data: [[px, py, vx, vy, ax, ay, M_ID], ...] -> [[Xc, Yc, M_ID], [], ...]
+            
+            for i, (x, y) in enumerate(estimated_pixels):
+                Xc, Yc = int(x), int(y)
+                MMWs[i].Xc, MMWs[i].Yc = Xc, Yc
+                cv2.circle(online_im, (Xc, Yc), 2, (204, 0, 204), 5) 
+                cv2.putText(online_im, "Yes", (Xc, Yc+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 255, 0), 1, cv2.LINE_AA)
+            # print("estimated_pixels", estimated_pixels)
 
-            print("estimated_pixels", estimated_pixels)
+            e = datetime.now()  
+            print("predict time", (e-s).total_seconds())
 
-            """ Match, cal error: find the corresponding person """
+            
+
+            """ MATCH, cal error: find the corresponding person """
             ### px, py, real_dis, ID_mmwave <=> center_u, center_v, esti_dis, ID_img, tlwh, dir_pt (xy_list <=> center_pt_list)
 
             if outputs[0] is not None:
+                """ OLD Version Match method """
                 # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
+                # [[reg_u, reg_v, real_dis, M_ID, px, py, vx, vy], ...] <--> [[center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)], ....]
                 online_im, new_mmwave_pts_list, ID_matches = pt_match(estimated_uv_list, new_center_pt_list, online_im, ID_matches)
+               
+
+                """ NEW Version Match method """ 
+                # input: estimated_pixels from RADAR: [[M_ID,   esti_x,   esti_y, M_dis], ...]
+                #                      bbox from CAM: [[C_ID, center_x, center_y, C_dis], ...]
+
+                # pixel_pts_match()
+
+
+
 
                 ### after match, show a new mmwave_pt_visual
                 new_bg_copy = copy.deepcopy(bg)

@@ -6,6 +6,8 @@ abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwa
     
 
 def saveData(img, mmwave, save_path, idx):
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
     img_name = os.path.join(save_path, 'image_{:08d}.jpg')
     mmwave_name = os.path.join(save_path, 'mmwave_{:08d}.json')
 

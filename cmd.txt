@@ -23,3 +23,5 @@ python byteTrack_RootNet.py webcam --camid 0 --fp16 --fuse
 
 using trt model -> more faster, 
 python byteTrack_trt_infer.py webcam --camid 0 --trt
+
+python main_20230518.py webcam --camid 0 --trt
