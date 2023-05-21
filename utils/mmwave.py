@@ -37,7 +37,7 @@ def get_mmwave_regression_pts(mmwave_json, origin_px=6.0, origin_py=1.0): # # or
                     mmwave_json["JsonTargetList"][i]["Ax"], \
                     mmwave_json["JsonTargetList"][i]["Ay"]
         
-        # xy_list.append([px, py, vx, vy, Ax, Ay, ID])
+        xy_list.append([px, py, vx, vy, Ax, Ay, ID])
         MMWs.append(MMW(px, py, ID, vx, vy, Ax, Ay))
 
         
@@ -96,6 +96,9 @@ def mmwave_extrapolation(mmwave_json, t):
                                mmwave_json["JsonTargetList"][i]["Ay"]
         ori_mmwave = np.array([x, y, vx, vy, ax, ay])
         new_mmwave = np.matmul(mtx_trans, ori_mmwave)
+
+        ### you can observe the <ori_mmwave> and <jorjin app view>
+        ### so => "vx = -mmwave_json["JsonTargetList"][i]["Vx"]"
         # print(ori_mmwave)
         # print(new_mmwave)
         
@@ -502,81 +505,6 @@ def pt_match(xy_list, center_pt_list, im0, previous_ID_matches=[]):
 
     return im0, new_mmwave_pts_list, ID_matches
 
-
-# # xy_list: mmwave list, [corresponding_u, corresponding_v, real_dis, ID, px, py]
-# # center_pt_list: img list, [center_pt_x, center_pt_y, fake_dis, ID, tlwh]
-def pixel_pts_match(estimated_pixels, center_pt_list, previous_ID_matches=[]):
-    ## get error matrix between xy_list(mmwave) and center_pt_list(camera)
-    error_matrix = getErrorMatrix(xy_list, center_pt_list, error_threshold=150)
-    # print(error_matrix)
-
-    # # linear_assignment problem, match the N x M matrix, ref: https://github.com/gatagat/lap
-    # # get the minimum sum of weight, using lap.lapjv to solve it.
-    matches, unmatched_mmwave, unmatched_img = linear_assignment(np.array(error_matrix))
-    # print("matches", matches) # idx matches
-    # print("unmatched_mmwave", unmatched_mmwave)
-    # print("unmatched_img", unmatched_img)
-    
-    """ for Matched pts""" # the best situation
-    new_mmwave_pts_list = []
-    ID_matches = []
-    for i, j in matches:
-        # print("real_dis, fake_dis, diff",xy_list[i][2], center_pt_list[j][2], xy_list[i][2]-center_pt_list[j][2])
-
-        ID_img = int(center_pt_list[j][3])
-        l, t, _, _ = map(int, center_pt_list[j][4]) # map all para to int type
-        _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[i]
-        
-        cv2.putText(im0, "-"+str(ID_mmwave)+" ", (l+20, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 1, cv2.LINE_AA)
-        # cv2.putText(im0, str(real_dis), (l+50, t), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.9, (255, 255, 0), 1, cv2.LINE_AA)
-
-        new_mmwave_pts_list.append([px, py, str(ID_img)+"_"+str(ID_mmwave), (232, 229, 26)]) # give green color for vis to distinguish
-        ID_matches.append([ID_mmwave, ID_img, px, py]) # save for previous ID matches
-
-    # print("ID_matches", ID_matches)
-    
-    # print("previous_ID_matches", previous_ID_matches)
-
-
-    """ unmatched problem: "Person Stopped", mmwave pt will disappear
-         person in img and exists previous pos.""" 
-    # # process the unmatched img person but matched before 
-
-    # one/more person with no mmwave pos. (no mmwave data to match, so unmatch_img will be empty)
-    if len(xy_list) == 0 and len(center_pt_list)!=0: 
-        unmatched_img = [i for i in range(len(center_pt_list))]
-    if len(unmatched_img)!=0: # unmatched_img idx
-        for ID_mmwave, ID_img, px, py in previous_ID_matches:
-            unmatched_img_ID = np.array(center_pt_list, dtype=object)[unmatched_img][:, 3]
-            # print("ID_img", ID_img)
-            # print("unmatched_img_ID", unmatched_img_ID)
-            if ID_img in unmatched_img_ID:
-                # print("find!!!!!!!!!!!!!!")
-                ID_matches.append([ID_mmwave, ID_img, px, py]) # add to previous matches, record
-                new_mmwave_pts_list.append([px, py, str(ID_img)+"_"+str(ID_mmwave), (0, 143, 255)]) # add to mmwave visualization
-                # give orange color for vis to distinguish
-
-                # # if find the previous ID matched, 
-                # # so need to "delete" corresponding idx from "unmatched_mmwave"
-                for i, idx in enumerate(unmatched_mmwave):
-                    if ID_mmwave == xy_list[idx][3]:
-                        unmatched_mmwave = np.delete(unmatched_mmwave, i)
-                        break
-
-    """camera can not capture person, but mmwave has pts""" # use mmwave original pt, just show it 
-    # # solve the person out of view (camera can not capture, but mmwave can)
-    if len(xy_list) != 0 and len(center_pt_list)==0:  # # no person 
-        unmatched_mmwave = [i for i in range(len(xy_list))]
-    # # if unmatched mmwave exists, just show it 
-    if len(unmatched_mmwave)!=0: # unmatched_mmwave idx
-        for idx in unmatched_mmwave:
-            _, _, real_dis, ID_mmwave, px, py, vx, vy = xy_list[idx]
-            new_mmwave_pts_list.append([px, py, ID_mmwave, (0, 0, 0)])  # add to mmwave visualization
-            # give black color for vis to distinguish
-    
-    # print("new_mmwave_pts_list", new_mmwave_pts_list)
-
-    return im0, new_mmwave_pts_list, ID_matches
 
 
 

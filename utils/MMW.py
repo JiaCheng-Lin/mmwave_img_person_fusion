@@ -4,41 +4,71 @@ import math
 
 ## Define a mmwave radar point class
 class MMW(object):
-    def __init__(self, Px, Py, ID="", Vx=None, Vy=None, \
+    def __init__(self, Px, Py, ID=None, Vx=None, Vy=None, \
                 Ax=None, Ay=None, Xc=None, Yc=None): # Xc, Yc: estimated x, y (pixel)
         self.Px = Px
         self.Py = Py
-        if ID != "":
-            self.ID = int(ID)
-        else:
-            self.ID = ""
+
+        self.ID = int(ID)
+ 
         self.Vx = Vx
         self.Vy = Vy
         self.Ax = Ax
         self.Ay = Ay
-        self.Xc = Xc # estimated x 
-        self.Yc = Yc # estimated y 
 
-    def draw(self, bg_img, pt_color=(0, 0, 255), pt_size=4, coor_size=(600, 800, 3)):
+        self.Xc = Xc # estimated x (pixel)
+        self.Yc = Yc # estimated y (pixel)
+
+        self.Dir = None # direction of Vx, Vy
+        if self.Vx and self.Vy:
+            tmp_Vx, tmp_Vy = -self.Vx, -self.Vy # It is opposite to the data direction given by the app 
+            length = np.linalg.norm(np.array([tmp_Vx, tmp_Vy]))
+            tmp_Vx, tmp_Vy = tmp_Vx/length*20, tmp_Vy/length*20 # unit vector
+            self.Dir = (int(tmp_Vx), int(tmp_Vy))
+
+        self.BBOX_ID = None # corresponding BBOX ID
+
+    # draw radar point in radar image(plane)
+    def drawInRadar(self, bg_img, pt_color=(0, 0, 255), pt_size=4, coor_size=(600, 800, 3), showArrow=False):
         h, w, _ = coor_size
         origin_pt = np.array((w//2, h-30))
         gap = 60 # default pts dis: 60 pixels/meter
         
+        # draw point
         bg_pt = (origin_pt + (-self.Px*gap, -self.Py*gap)).astype(int)
         cv2.circle(bg_img, bg_pt, pt_size, pt_color, -1) 
-
+        
+        # draw text
         dis = round(np.sqrt(self.Px**2+self.Py**2), 3)
-        info = str(self.ID) # +" ("+str(round(-self.Px, 2))+", "+str(round(self.Py, 2))+") "#+str(dis)
+        info = str(self.ID)  +" ("+str(round(-self.Px, 2))+", "+str(round(self.Py, 2))+") "#+str(dis)
         cv2.putText(bg_img, info, (bg_pt[0]+5, bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
         
-        if self.Vx and self.Vy:
-            tmp_Vx, tmp_Vy = -self.Vx, -self.Vy # It is opposite to the data direction given by the app 
-            tmp_Vx, tmp_Vy = tmp_Vx/math.sqrt((tmp_Vx**2+tmp_Vy**2))*20, tmp_Vy/(math.sqrt(tmp_Vx**2+tmp_Vy**2))*20
-            end_point = bg_pt + (int(tmp_Vx), int(tmp_Vy))
-            # print(bg_pt, end_point)
+        # draw arrow line
+        if self.Dir and showArrow:
+            end_point = bg_pt + self.Dir
             cv2.arrowedLine(bg_img, bg_pt, end_point, (0, 255, 0), 2)
         
         return bg_img
+    
+    # draw estimated pixel point(Xc, Yc) in camera image
+    def drawInCamera(self, img, pt_color=(0, 0, 255), pt_size=5, \
+                    text="", text_size=0.8, text_color=(255, 255, 0), showArrow=False):
+
+        # draw a estimated pixel point
+        cv2.circle(img, (self.Xc, self.Yc), 2, pt_color, 5) 
+
+        # draw text (MMWave ID and text)
+        info = "MID: "+str(self.ID) + " " + text
+        cv2.putText(img, info, (self.Xc, self.Yc+5), \
+                    cv2.FONT_HERSHEY_COMPLEX_SMALL, text_size, text_color, 1, cv2.LINE_AA)
+
+        # draw arrow line
+        if self.Dir and showArrow:
+            bg_pt = np.array((self.Xc, self.Yc))
+            end_point = bg_pt + self.Dir
+            cv2.arrowedLine(img, bg_pt, end_point, (0, 255, 0), 2)
+
+        return img
 
 
 # Convert <mmwave Json file> to <list contains MMW() class.

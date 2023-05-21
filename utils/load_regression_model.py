@@ -122,9 +122,10 @@ def get_MMW2bbox_regression_model(model_name, input_dim=6):
 
     return model.eval()
 
-def predict_pos(model, data): # data: np array, [[bottom_x, bottom_y, w, h, C_ID], ...]
+def predict_pos(model, BBOXs): # data: np array, [[bottom_x, bottom_y, w, h, C_ID], ...]
+    data = np.array([[a.bottom_x, a.bottom_y] for a in BBOXs])
     if data.size != 0:
-        test_dataset =  cam_mmw(data[:, :-1]) # np.array([[104., 392.28721168, 105.26521565, 294.57442337]])
+        test_dataset =  cam_mmw(data) 
         test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False, pin_memory=True)
         
         preds = []
@@ -134,11 +135,15 @@ def predict_pos(model, data): # data: np array, [[bottom_x, bottom_y, w, h, C_ID
                 pred = model(x)                     
                 preds.append(pred.detach().cpu())   
         preds = torch.cat(preds, dim=0).numpy() 
+        
+        for i, (Xr, Yr) in enumerate(preds):
+            BBOXs[i].Xr, BBOXs[i].Yr = Xr, Yr
 
-        return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with CAM ID 
+        return BBOXs
+        # return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with CAM ID 
     return []
 
-def predict_pixel(model, MMWs): # data: np array, [[px, py, vx, vy, ax, ay, M_ID], ...]
+def predict_pixel(model, MMWs): # data: np array, [[px, py, vx, vy, ax, ay], ...]
     data = np.array([[a.Px, a.Py, a.Vx, a.Vy, a.Ax, a.Ay] for a in MMWs]) # [[px, py, vx, vy, ax, ay], ...]
     if data.size != 0:
         test_dataset =  cam_mmw(data) 
@@ -152,30 +157,14 @@ def predict_pixel(model, MMWs): # data: np array, [[px, py, vx, vy, ax, ay, M_ID
                 preds.append(pred.detach().cpu())   
         preds = torch.cat(preds, dim=0).numpy() 
 
-        # print(preds, np.array([data[:, -1]]).T) 
+        for i, (Xc, Yc) in enumerate(preds):
+            MMWs[i].Xc, MMWs[i].Yc = int(Xc), int(Yc) # pixel -> int
         
-        return preds
+        return MMWs
 
         # return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with MMW ID
     return []
 
-# def predict_pixel(model, data): # data: np array, [[px, py, vx, vy, ax, ay, M_ID], ...]
-#     if data.size != 0:
-#         test_dataset =  cam_mmw(data[:, :-1]) 
-#         test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False, pin_memory=True)
-        
-#         preds = []
-#         for x in test_loader: # tqdm(test_loader):
-#             x = x.to('cuda')                        
-#             with torch.no_grad():                   
-#                 pred = model(x)                     
-#                 preds.append(pred.detach().cpu())   
-#         preds = torch.cat(preds, dim=0).numpy() 
-
-#         # print(preds, np.array([data[:, -1]]).T) 
-
-#         return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with MMW ID
-#     return []
 
 # if __name__ == '__main__':
 

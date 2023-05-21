@@ -43,6 +43,11 @@ from MMW import MMW, json2MMWCls
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
+## BBOX
+from BBOX import BBOX, list2BBOXCls
+
+from matching import MMWs_BBOXs_match, cal_BBOX_MMW_error
+
 
 def make_parser():
     parser = argparse.ArgumentParser("ByteTrack Demo!")
@@ -283,7 +288,7 @@ def get_center_pt_list(online_im, online_ids, online_tlwhs):
         center_pt_x, center_pt_y = int(tlwh[0]+tlwh[2]/2), int(tlwh[1]+tlwh[3]/2)
         bottom_pt = int(tlwh[1]+tlwh[3])-20
         # cv2.circle(online_im, (center_pt_x, bottom_pt), 2, (0, 0, 255), 5)
-        cv2.circle(online_im, (center_pt_x, center_pt_y), 2, (0, 0, 255), 5)
+        # cv2.circle(online_im, (center_pt_x, center_pt_y), 2, (0, 0, 255), 5)
 
         """  estimate fake distance using bbox  """ # reference: (github) Yolov4-Detector-and-Distance-Estimator
         focal_person = 1035 # pixels, calculation see main_BT.py file
@@ -317,7 +322,7 @@ def draw_frame_arrow(pre, cur, img):
 
                     Vx, Vy = Vx/math.sqrt((Vx**2+Vy**2))*20, Vy/(math.sqrt(Vx**2+Vy**2))*20  # normalize the length in fig
                     end_point = (x1+int(Vx), y1+int(Vy)) # the direction
-                    cv2.arrowedLine(img, (x1, y1), end_point, (0, 255, 0), 3) 
+                    # cv2.arrowedLine(img, (x1, y1), end_point, (0, 255, 0), 3) 
                     new_list[i][-1] = end_point # new direction to the center_list
                     break
 
@@ -357,8 +362,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     frame_id = 0
     results = []
     # mmwave_json = pre_mmwave_json = None # initialize mmwave_json data
-    pre_center_pt_list = []
-    center_pt_list = []
+    pre_center_pt_list, center_pt_list = [], []
+    pre_BBOXs, BBOXs = [], [] # record previous/current BBOXs infomation
     ID_matches  = [] # record ID matches
 
     # # read mmwave background image
@@ -400,12 +405,15 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # load regression model
     import utils.load_regression_model as LRM
     ### Camera to Radar
-    bbox2MMW_model_name = "model_bbox2mmw_0.136.ckpt"
-    bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=4)
+    bbox2MMW_model_name = 'model_bbox2mmw_0.195.ckpt' # "model_bbox2mmw_0.136.ckpt"
+    bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
 
     ### Radar to Camera
-    MMW2bbox_model_name = "model_mmw2bbox.ckpt"
+    MMW2bbox_model_name = 'model_mmw2bbox_13.598.ckpt' # "model_mmw2bbox.ckpt"
     MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
+    
+    match_cnt = 0
+    pixel_error_sum, meter_error_sum = 0, 0
 
     while True:
         # if frame_id % 20 == 0:
@@ -413,6 +421,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         ret_val, frame = cap.read()
         # cv2.imshow('frame', frame)
 
+        bg_copy = copy.deepcopy(bg) ## mmw plane image
         if ret_val:
             # resize image
             frame = cv2.resize(frame, (640, 480), interpolation = cv2.INTER_AREA)
@@ -437,9 +446,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             save_idx += 1
 
             ## mmwave pts visualization by OpenCV, time consume: about 1ms. 
-            bg_copy = copy.deepcopy(bg)
+            # bg_copy = copy.deepcopy(bg)
             # mmwave_pt_visual = draw_mmwave_pts(bg_copy, ori_mmwave_json)
-            mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
+            # mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
             # cv2.imshow("mmwave", mmwave_pt_visual)
 
 
@@ -465,29 +474,29 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1, fps=1. / timer.average_time
                 )
                 
-                # 
-                if center_pt_list:
-                    pre_center_pt_list = center_pt_list
-
-                center_pt_list, online_im, tmp_pt_list, regression_pt_list = get_center_pt_list(online_im, online_ids, online_tlwhs)# tmp_pt_list: for perspective transform
+                # pre_center_pt_list = center_pt_list
+                # center_pt_list, online_im, tmp_pt_list, regression_pt_list = get_center_pt_list(online_im, online_ids, online_tlwhs) # tmp_pt_list: for perspective transform
 
                 # Draw the direction of each person's center point between frames. 
-                new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
+                # new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
                 # new_center_pt_list: center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
 
 
-                """ DO Transform! (project bbox pts to MMW) """
-                ## pass data to regression model(bbox to MMW)
-                ## data: # [[bottom_x, bottom_y, w, h], [], ...] -> [[Xr, Yr, C_ID], [], ...]
-                estimated_MMW = LRM.predict_pos(bbox2MMW_model, data=np.array(regression_pt_list)) 
-                # visualization new MMW (project bbox to MMW)
-                estimated_MMW_bg = copy.deepcopy(bg)
-                for x, y, C_ID in estimated_MMW:
-                    mmwave_pt_visual = MMW(x, y, C_ID).draw(mmwave_pt_visual, pt_color=(255, 0, 0), pt_size=3)
-                
-                cv2.imshow('estimated position',mmwave_pt_visual)
-                
 
+                """ DO Transform! (project bbox pts to MMW) """ # time consuming: < 10ms
+                s = datetime.now() 
+                pre_BBOXs = BBOXs # Record previous BBOXs, you can get the directon / still(?)
+                BBOXs = list2BBOXCls(online_ids, online_tlwhs, pre_BBOXs) # convert original data to list[BBOX(), BBOX(), ...]
+                BBOXs = LRM.predict_pos(bbox2MMW_model, BBOXs) # ## predict Xr, Yr in Radar for each BBOX() 
+
+                
+                # visualization
+                for bbox_cls in BBOXs: 
+                    bg_copy = bbox_cls.drawInRadar(bg_copy, pt_color=(0, 0, 0), pt_size=3, showArrow=True) # draw estimated Radar points(Xr, Yr) in radar plane
+                    online_im = bbox_cls.drawInCamera(online_im, pt_color=(0, 0, 255), pt_size=5, showArrow=True) # draw bbox centroid in image 
+                e = datetime.now()  
+                # print("bbox predict time", (e-s).total_seconds())
+                
             else:
                 timer.toc()
                 online_im = img_info['raw_img']
@@ -499,25 +508,18 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             # print("estimated_uv_list", estimated_uv_list) # [[reg_u, reg_v, real_dis, ID, px, py, vx, vy], ...]
 
-            """ NEW Version: DO Transform (project mmw pts to image) """ 
-            s = datetime.now() 
-
-            # mmw_regression_pts, MMWs = get_mmwave_regression_pts(sync_mmwave_json) # process data to MMW() class
-            MMWs = json2MMWCls(sync_mmwave_json)
+            """ NEW Version: DO Transform (project mmw pts to image) """  # time consuming: < 10ms
+            s1 = datetime.now()   #
+            MMWs = json2MMWCls(sync_mmwave_json) # convert json data to list[MMW(), MMW(), ...]
+            MMWs = LRM.predict_pixel(MMW2bbox_model, MMWs)  ## predict Xc, Yc in image for each MMW() 
             
-            # print("inputs", inputs)
-            # print("mmw_regression_pts", mmw_regression_pts)
-            estimated_pixels = LRM.predict_pixel(MMW2bbox_model, MMWs)  ## data: [[px, py, vx, vy, ax, ay, M_ID], ...] -> [[Xc, Yc, M_ID], [], ...]
-            
-            for i, (x, y) in enumerate(estimated_pixels):
-                Xc, Yc = int(x), int(y)
-                MMWs[i].Xc, MMWs[i].Yc = Xc, Yc
-                cv2.circle(online_im, (Xc, Yc), 2, (204, 0, 204), 5) 
-                cv2.putText(online_im, "Yes", (Xc, Yc+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 255, 0), 1, cv2.LINE_AA)
-            # print("estimated_pixels", estimated_pixels)
+            for mmw_cls in MMWs: # visualization
+                bg_copy = mmw_cls.drawInRadar(bg_img=bg_copy, pt_color=(255, 0, 0), pt_size=3, showArrow=True)  ## draw time_sync MMW points
+                online_im = mmw_cls.drawInCamera(img=online_im, pt_color=(204, 0, 204), pt_size=2, text="", showArrow=True) # draw estimated points(Xc,Yc) in image
+            cv2.imshow("bg_copy", bg_copy)
 
-            e = datetime.now()  
-            print("predict time", (e-s).total_seconds())
+            e1 = datetime.now()  
+            # print("predict time", (e1-s1).total_seconds())
 
             
 
@@ -528,22 +530,34 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 """ OLD Version Match method """
                 # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
                 # [[reg_u, reg_v, real_dis, M_ID, px, py, vx, vy], ...] <--> [[center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)], ....]
-                online_im, new_mmwave_pts_list, ID_matches = pt_match(estimated_uv_list, new_center_pt_list, online_im, ID_matches)
+
+                # online_im, new_mmwave_pts_list, ID_matches = pt_match(estimated_uv_list, new_center_pt_list, online_im, ID_matches)
                
 
                 """ NEW Version Match method """ 
-                # input: estimated_pixels from RADAR: [[M_ID,   esti_x,   esti_y, M_dis], ...]
-                #                      bbox from CAM: [[C_ID, center_x, center_y, C_dis], ...]
+                # input: RADAR: [MMW(), MMW(), ...]
+                #          CAM: [BBOX(), BBOX(), ...]
 
-                # pixel_pts_match()
+                # s2 = datetime.now()   #
+                online_im = MMWs_BBOXs_match(MMWs, BBOXs, online_im)
+                # e2 = datetime.now()  
+                # print("predict time", (e2-s2).total_seconds())
 
+                # if len(BBOXs)==1 and len(MMWs)==1:
+                #     pixel_error, meter_error = cal_BBOX_MMW_error(MMWs[0], BBOXs[0])
+                #     pixel_error_sum += pixel_error
+                #     meter_error_sum += meter_error
+                #     match_cnt += 1
+
+                #     print("mean pixel error", pixel_error_sum/match_cnt)
+                #     print("meter pixel error", meter_error_sum/match_cnt)
 
 
 
                 ### after match, show a new mmwave_pt_visual
-                new_bg_copy = copy.deepcopy(bg)
-                new_mmwave_pt_visual = draw_mmwave_pts_sync(new_bg_copy, xy_list=new_mmwave_pts_list)
-                cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
+                # new_bg_copy = copy.deepcopy(bg)
+                # new_mmwave_pt_visual = draw_mmwave_pts_sync(new_bg_copy, xy_list=new_mmwave_pts_list)
+                # cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
             """!!! mmwave process !!!"""
 
             if args.save_result:
