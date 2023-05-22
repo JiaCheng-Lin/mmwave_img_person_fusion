@@ -37,8 +37,10 @@ class MMW(object):
 
     def addEstimatedXcYc(self, Xc, Yc, imgSize=(640, 480)):
         self.Xc, self.Yc = Xc, Yc
-
-        if 10<=Xc<=imgSize[0]-10 and 10<=Yc<=imgSize[1]-10: # person in Cam img
+        
+        buffer = 100 # buffer area, when person going to camera image area, 
+                    # give a buffer area, so the MMW can also have UID.
+        if buffer<=Xc<=imgSize[0]-buffer and buffer<=Yc<=imgSize[1]-buffer: # person in Cam img
             self.OutOfImg = False
         else:
             self.OutOfImg = True

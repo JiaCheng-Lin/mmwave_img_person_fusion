@@ -405,11 +405,11 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # load regression model
     import utils.load_regression_model as LRM
     ### Camera to Radar
-    bbox2MMW_model_name = 'model_bbox2mmw_0.195.ckpt' # "model_bbox2mmw_0.136.ckpt"
+    bbox2MMW_model_name = 'model_bbox2mmw_0.204.ckpt' 
     bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
 
     ### Radar to Camera
-    MMW2bbox_model_name = 'model_mmw2bbox_13.598.ckpt' # "model_mmw2bbox.ckpt"
+    MMW2bbox_model_name = 'model_mmw2bbox_25.740.ckpt' 
     MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
     
     match_cnt = 0

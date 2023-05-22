@@ -2,13 +2,6 @@ import numpy as np
 import cv2  
 import math
 
-# Define a UID class, it records the relationship between MMW() and BBOX()
-class UID(object):
-    def __init__(self, UID=None):
-        self.UID = UID
-        self.C_ID = None
-        self.M_ID = None
-
 # if MMW_ID is not exist in MMWs list -> delete the relationship {MID: UID} if exist before.
 # because the MMW_ID is complementary
 def filter_MMWs_UID(MMWs, MMWs_UID):
@@ -74,6 +67,7 @@ def UID_assignment(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID, UID_numbe
             BBOXs_UID[bbox_cls.ID] = UID_number
             bbox_cls.UID = UID_number
             UID_number += 1
+
     for mmw_cls in MMWs:
         if not MMWs_UID.get(mmw_cls.ID) and mmw_cls.OutOfImg and mmw_cls.UID==None: # out of cam image
             MMWs_UID[mmw_cls.ID] = UID_number
