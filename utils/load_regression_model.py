@@ -137,7 +137,7 @@ def predict_pos(model, BBOXs): # data: np array, [[bottom_x, bottom_y, w, h, C_I
         preds = torch.cat(preds, dim=0).numpy() 
         
         for i, (Xr, Yr) in enumerate(preds):
-            BBOXs[i].Xr, BBOXs[i].Yr = Xr, Yr
+            BBOXs[i].addEstimatedXrYr(Xr, Yr)
 
         return BBOXs
         # return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with CAM ID 
@@ -158,7 +158,8 @@ def predict_pixel(model, MMWs): # data: np array, [[px, py, vx, vy, ax, ay], ...
         preds = torch.cat(preds, dim=0).numpy() 
 
         for i, (Xc, Yc) in enumerate(preds):
-            MMWs[i].Xc, MMWs[i].Yc = int(Xc), int(Yc) # pixel -> int
+            MMWs[i].addEstimatedXcYc(int(Xc), int(Yc)) # pixel -> int 
+            # MMWs[i].Xc, MMWs[i].Yc = int(Xc), int(Yc) # pixel -> int
         
         return MMWs
 

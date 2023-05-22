@@ -16,17 +16,29 @@ class BBOX(object):
 
         self.Xr = None # estimated x (meter)
         self.Yr = None # estimated y (meter)
-        self.Dis = None         
-        if self.Xr and self.Yr:
-            self.Dis = np.linalg.norm(np.array([self.Xr, self.Yr])) # l2 norm
+        self.Dis = None  # l2 norm(Xr, Yr)    
+        self.bg_pt = None # for drawing in radar image  
 
         self.Dir = None # direction of bbox
         self.Still = None # people still or moving
         self.StillThreshold = 5 # pixel 
 
         self.MMW_ID = None # corresponding MMW ID
+        # self.matched_MMW = None # corresponding MMW()
+        
+        self.UID = None
+    
+    def addEstimatedXrYr(self, Xr, Yr, coor_size=(600, 800, 3)):
+        self.Xr, self.Yr = Xr, Yr
+        self.Dis = np.linalg.norm(np.array([self.Xr, self.Yr])) # l2 norm
+        
+        # for radar plane vis
+        h, w, _ = coor_size
+        origin_pt = np.array((w//2, h-30)) # (0, 0) in radar plane
+        gap = 60 # default pts dis: 60 pixels/meter
+        self.bg_pt = (origin_pt + (-self.Xr*gap, -self.Yr*gap)).astype(int)
 
-    # add previous BBOX() infomation, like direction, ...
+    # add previous BBOX() infomation, like direction / if Still /...
     def addPreBBOXs(self, pre):
         Vx, Vy = self.center_x-pre.center_x, self.center_y-pre.center_y
         length = np.linalg.norm(np.array([Vx, Vy])) # l2 norm
@@ -55,30 +67,34 @@ class BBOX(object):
 
     # draw estimated radar point in radar image(plane)
     def drawInRadar(self, bg_img, pt_color=(0, 0, 255), pt_size=4, \
-                        coor_size=(600, 800, 3), showArrow=False):
-        h, w, _ = coor_size
-        origin_pt = np.array((w//2, h-30))
-        gap = 60 # default pts dis: 60 pixels/meter
+                         showArrow=False):
         
-        # draw point
-        bg_pt = (origin_pt + (-self.Xr*gap, -self.Yr*gap)).astype(int)
-        cv2.circle(bg_img, bg_pt, pt_size, pt_color, -1) 
+        cv2.circle(bg_img, self.bg_pt, pt_size, pt_color, -1) 
         
         # draw text
         info = "CID: " + str(self.ID) # +" ("+str(round(-self.Xr, 2))+", "+str(round(self.Yr, 2))+") "
-        cv2.putText(bg_img, info, (bg_pt[0]+5, bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
+        cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
 
         # draw arrow line
         if self.Dir and showArrow:
-            end_point = bg_pt + self.Dir
-            cv2.arrowedLine(bg_img, bg_pt, end_point, (16, 137, 214), 2)
+            end_point = self.bg_pt + self.Dir
+            cv2.arrowedLine(bg_img, self.bg_pt, end_point, (16, 137, 214), 2)
 
         return bg_img
 
     def drawCorrespondingMID(self, img):
-        cv2.putText(img, "-"+str(self.MMW_ID)+" ", (self.Xmin+20, self.Ymin), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, "- MID:"+str(self.MMW_ID)+" ", (self.Xmin+20, self.Ymin), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 255, 0), 1, cv2.LINE_AA)
         
         return img
+
+    def drawUIDInRadar(self, bg_img, pt_size=3, pt_color=(0, 143, 255)):
+        
+        if self.UID: # not None
+            cv2.circle(bg_img, self.bg_pt, pt_size, pt_color, -1)  # draw bg_pt point
+            info = str(self.UID) + " " + str(self.MMW_ID) + " " + str(self.ID) 
+            cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
+        
+        return bg_img
 
 def list2BBOXCls(online_ids, online_tlwhs, pre_BBOXs):
     BBOXs = [] # save all BBOX() info

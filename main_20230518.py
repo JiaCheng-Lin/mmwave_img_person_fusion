@@ -415,6 +415,12 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     match_cnt = 0
     pixel_error_sum, meter_error_sum = 0, 0
 
+    ## UID assignment
+    from UID import UID_assignment
+    UID_number = 0 # init
+    BBOXs_UID = {}
+    MMWs_UID = {}
+
     while True:
         # if frame_id % 20 == 0:
         #     logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -504,8 +510,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             """!!! mmwave process !!!"""
 
             """ OLD Version: DO Transform! (project MMW pts to img) """ # xy_list: [[px, py, real_dis, ID], ], 
-            # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-            online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            # #### online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            # online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             # print("estimated_uv_list", estimated_uv_list) # [[reg_u, reg_v, real_dis, ID, px, py, vx, vy], ...]
 
             """ NEW Version: DO Transform (project mmw pts to image) """  # time consuming: < 10ms
@@ -538,10 +544,41 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 # input: RADAR: [MMW(), MMW(), ...]
                 #          CAM: [BBOX(), BBOX(), ...]
 
-                # s2 = datetime.now()   #
-                online_im = MMWs_BBOXs_match(MMWs, BBOXs, online_im)
-                # e2 = datetime.now()  
+                s2 = datetime.now()   #
+                MMWs, BBOXs, u_MMWs, u_BBOXs, matches_idx_list = MMWs_BBOXs_match(MMWs, BBOXs, online_im)
+                
+                ## vis
+                for idx, bbox_cls in enumerate(BBOXs):  # draw in cam image
+                    online_im = bbox_cls.drawCorrespondingMID(online_im) # draw matched MMW_ID in image
+
+                bg_match = copy.deepcopy(bg) ## mmw plane image for MATCH
+                for u_bbox_cls in u_BBOXs: # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
+                    bg_match = u_bbox_cls.drawInRadar(bg_match) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                for mmw_cls in MMWs: 
+                    bg_match = mmw_cls.drawCorrespondingCID(bg_match) # draw matched BBOX_ID in radar plane image
+                cv2.imshow("bg_match", bg_match)
+                
+                e2 = datetime.now()  
                 # print("predict time", (e2-s2).total_seconds())
+
+
+                """ UID """
+                BBOXs, MMWs, BBOXs_UID, MMWs_UID, UID_number = UID_assignment(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID, UID_number)
+                print("MMWs_UID", MMWs_UID)
+                print("BBOXs_UID", BBOXs_UID)
+
+                # vis
+                bg_UID = copy.deepcopy(bg)
+                for u_bbox_cls in u_BBOXs: # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
+                    bg_UID = u_bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                for mmw_cls in MMWs: 
+                    bg_UID = mmw_cls.drawUID(bg_UID) # draw matched BBOX_ID in radar plane image
+                cv2.imshow("bg_UID", bg_UID)
+
+                
+
+
+
 
                 # if len(BBOXs)==1 and len(MMWs)==1:
                 #     pixel_error, meter_error = cal_BBOX_MMW_error(MMWs[0], BBOXs[0])
@@ -551,6 +588,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
                 #     print("mean pixel error", pixel_error_sum/match_cnt)
                 #     print("meter pixel error", meter_error_sum/match_cnt)
+
 
 
 

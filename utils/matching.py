@@ -24,12 +24,10 @@ def checkWithinBbox(MMW, BBOX):
 
 # assign MMW to BBOX, one to one
 def linear_assignment(cost_matrix, thresh=10000.0):
-    if cost_matrix.size == 0: # check whether the np.array is empty 
-        return [], [], []
     matches, unmatched_a, unmatched_b = [], [], []
     c, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=thresh)
-    print("lap.lapjv", c, x, y)
-    print("cost_matrix", cost_matrix)
+    # print("lap.lapjv", c, x, y)
+    # print("cost_matrix", cost_matrix)
     
     for ix, mx in enumerate(x):# ix: mmw idx, mx: bbox idx
         if mx >= 0: # matched！
@@ -71,6 +69,16 @@ def getErrorMatrix(xy_list, center_pt_list, error_threshold=200):
     
     return error_matrix # # row: mmwave, col: img(camera)
 
+# direction check: if two dir degree>90(dot<0) -> unmatch
+# cal the degree/dot of two dir
+def sameDir(MMW_dir, BBOX_dir):
+    if MMW_dir and BBOX_dir: # if two dir exists
+        dir_dot = np.dot(np.array(MMW_dir), np.array(BBOX_dir))
+        #  print("dot", dir_dot)  # print("degree", np.arccos(dir_dot/np.linalg.norm(np.array(mmw_cls.Dir))/np.linalg.norm(np.array(bbox_cls.Dir)))*180/np.pi)
+        if dir_dot < 0: # degree > 90
+            return False 
+    return True # have not dir / dir_dot>=0 (degree<=90)
+
 def CalErrorMatrix(MMWs, BBOXs, error_threshold=150):
     unmatch_value = 1e6 
     error_mtx = [] # m x n
@@ -82,23 +90,17 @@ def CalErrorMatrix(MMWs, BBOXs, error_threshold=150):
                 pixel_error, meter_error = cal_BBOX_MMW_error(mmw_cls, bbox_cls) # cal th err
                 error = pixel_error*1 + meter_error*100 # weight
 
-                # direction check: if two dir degree>90(dot<0) -> unmatch
-                # cal the degree of two dir
-                dir_dot = 1 # init, 
-                if mmw_cls.Dir and bbox_cls.Dir: # if two dir exists
-                    dir_dot = np.dot(np.array(mmw_cls.Dir), np.array(bbox_cls.Dir))
-                    # print("dot", dir_dot)  # print("degree", np.arccos(dir_dot/np.linalg.norm(np.array(mmw_cls.Dir))/np.linalg.norm(np.array(bbox_cls.Dir)))*180/np.pi)
-
-                if error > error_threshold or dir_dot < 0: # degree > 90
+                if error>error_threshold: # or sameDir(mmw_cls.Dir, bbox_cls.Dir)==False: 
                     row_error_mtx.append(unmatch_value) #  give a large number to <error mtx>
                 else:
                     row_error_mtx.append(error) # add to error mtx
+
             else: 
                 row_error_mtx.append(unmatch_value)  # not in the bbox -> give a large number to <error mtx>
 
         error_mtx.append(row_error_mtx)
     
-    return error_mtx
+    return np.array(error_mtx)
 
 
 
@@ -106,16 +108,32 @@ def MMWs_BBOXs_match(MMWs, BBOXs, img):
     # cal the error matrix between bboxs and mmws
     error_matrix = CalErrorMatrix(MMWs, BBOXs) # size: m x n
 
-    # assign MMW to BBOX, one to one 
-    matches, u_MMWs, u_BBOXs = linear_assignment(np.array(error_matrix)) # matchs, unmatch_MMWs, unmatch_BBOXs
+    if error_matrix.size == 0: # one of them(MMWs, BBOXs) is empty
+            matches_idx_list, u_MMWs_idx_list, u_BBOXs_idx_list = np.array([]), \
+                                       np.arange(len(MMWs), dtype=int), \
+                                       np.arange(len(BBOXs), dtype=int),
+    else: # assign MMW to BBOX, one to one 
+        matches_idx_list, u_MMWs_idx_list, u_BBOXs_idx_list = linear_assignment(error_matrix) # matchs, unmatch_MMWs, unmatch_BBOXs
     
     """ for matches """
-    for m_idx, b_idx in matches:
+    for m_idx, b_idx in matches_idx_list:
         MMWs[m_idx].BBOX_ID = BBOXs[b_idx].ID
+        # MMWs[m_idx].matched_BBOX = BBOXs[b_idx]
+
         BBOXs[b_idx].MMW_ID = MMWs[m_idx].ID
-        BBOXs[b_idx].drawCorrespondingMID(img)
+        # BBOXs[b_idx].matched_MMW = MMWs[m_idx]
     
-    return img
+    """ for unmatch MMWs """
+    u_MMWs = [] # save all unmatch MMW(); [MMW(), ...]
+    for idx in u_MMWs_idx_list:
+        u_MMWs.append(MMWs[idx])
+
+    """ for unmatch MMWs """
+    u_BBOXs = [] # save all unmatch BBOX(); [BBOX(), ...]
+    for idx in u_BBOXs_idx_list:
+        u_BBOXs.append(BBOXs[idx])
+    
+    return MMWs, BBOXs, u_MMWs, u_BBOXs, matches_idx_list
 
 
 
