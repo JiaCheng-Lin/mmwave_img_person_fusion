@@ -101,7 +101,7 @@ class MMW(object):
     
     def drawUID(self, bg_img, pt_size=3, match_pt_color=(232, 229, 26)):
         # draw text 
-        if self.UID: # not None
+        if self.UID: # not None  
             cv2.circle(bg_img, self.bg_pt, pt_size, match_pt_color, -1)  # draw bg_pt point
             info = str(self.UID) + " " + str(self.ID) + " " + str(self.BBOX_ID)
             cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)

@@ -96,6 +96,15 @@ class BBOX(object):
         
         return bg_img
 
+    def drawBBOXInCamera(self, img):
+        cv2.rectangle(img, (self.Xmin, self.Ymin), (self.Xmax, self.Ymax), color=(255,0,0), thickness=2) # bbox
+
+        info = str(self.UID)
+        cv2.putText(img, info, (self.Xmin, self.Ymin), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 34), 1, cv2.LINE_AA)
+        
+        return img
+
+
 def list2BBOXCls(online_ids, online_tlwhs, pre_BBOXs):
     BBOXs = [] # save all BBOX() info
     for idx, tlwh in enumerate(online_tlwhs): # cur

@@ -13,6 +13,8 @@ def filter_MMWs_UID(MMWs, MMWs_UID):
 
     return new_MMWs_UID
 
+# Check the <BBOXs> and <MMWs out of image> which have got UID
+# And give the UID to current class().
 def checkUIDExists(BBOXs, MMWs, BBOXs_UID, MMWs_UID):
     for bbox_cls in BBOXs:
         if BBOXs_UID.get(bbox_cls.ID): 
@@ -38,12 +40,12 @@ def processMatch(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID):
             MMWs_UID[MMWs[m_idx].ID] = MMWs[m_idx].UID
 
 
-        # # if MMW() has UID && BBOX() has UID -> match 
-        # # -> change MMW()'s UID to BBOX()'s UID
-        if MMWs[m_idx].UID and BBOXs[b_idx].UID and (MMWs[m_idx].UID != BBOXs[b_idx].UID):
-            print("!!!!! both have UID but not same !!!!!")
-            MMWs[m_idx].UID = BBOXs[b_idx].UID
-            MMWs_UID[MMWs[m_idx].ID] = MMWs[m_idx].UID
+        # # # if MMW() has UID && BBOX() has UID -> match 
+        # # # -> change MMW()'s UID to BBOX()'s UID
+        # if MMWs[m_idx].UID and BBOXs[b_idx].UID and (MMWs[m_idx].UID != BBOXs[b_idx].UID):
+        #     print("!!!!! both have UID but not same !!!!!")
+        #     MMWs[m_idx].UID = BBOXs[b_idx].UID
+        #     MMWs_UID[MMWs[m_idx].ID] = MMWs[m_idx].UID
 
         # print(MMWs[m_idx].UID, BBOXs[b_idx].UID)
 

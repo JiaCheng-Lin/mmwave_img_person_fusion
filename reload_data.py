@@ -37,9 +37,14 @@ from sklearn.pipeline import make_pipeline
 ## save data
 from utils.save_data import *
 
+# MMW vis
+sys.path.append(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils")
+from MMW import MMW, json2MMWCls
 
-## load regression model
-from load_regression_model import *
+## BBOX
+from BBOX import BBOX, list2BBOXCls
+
+from matching import MMWs_BBOXs_match, cal_BBOX_MMW_error
 
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
@@ -352,6 +357,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     pre_center_pt_list = []
     center_pt_list = []
     previous_ID_matches  = [] # record previous ID matches
+    pre_BBOXs, BBOXs = [], [] # record previous/current BBOXs infomation
+    ID_matches  = [] # record ID matches
 
     # # read mmwave background image
     bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils/mmwave_bg_1.png")
@@ -365,7 +372,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     new_frame_time = 0
 
     ## save path for image & mmwave
-    folderName = "20230418_145353"  
+    folderName = "20230523_032529"  
     abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\img_mmwave_data/"
     data_dir = abs_path+'{}'.format(folderName)
 
@@ -380,8 +387,26 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output.avi', fourcc, 10.0, (640,  480))
 
+
+
     # load regression model
-    regression_model = get_regression_model()
+    import utils.load_regression_model as LRM
+    ### Camera to Radar
+    bbox2MMW_model_name = 'model_bbox2mmw_0.204.ckpt' 
+    bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
+
+    ### Radar to Camera
+    MMW2bbox_model_name = 'model_mmw2bbox_25.740.ckpt' 
+    MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
+    
+    match_cnt = 0
+    pixel_error_sum, meter_error_sum = 0, 0
+
+    ## UID assignment
+    from UID import UID_assignment
+    UID_number = 0 # init
+    BBOXs_UID = {}
+    MMWs_UID = {}
     
 
     for filename in os.listdir(data_dir):
@@ -404,8 +429,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             ## mmwave pts visualization by OpenCV, time consume: about 1ms. 
             bg_copy = copy.deepcopy(bg)
             # mmwave_pt_visual = draw_mmwave_pts(bg_copy, ori_mmwave_json)
-            mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
-            cv2.imshow("mmwave", mmwave_pt_visual)
+            # mmwave_pt_visual = draw_mmwave_pts_sync(bg_copy, sync_mmwave_json)
+            # cv2.imshow("mmwave", mmwave_pt_visual)
 
             if outputs[0] is not None: # bbox exists
                 online_targets = tracker.update(outputs[0], [img_info['height'], img_info['width']], exp.test_size)
@@ -430,46 +455,155 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 )
                 
                 # 
-                if center_pt_list:
-                    pre_center_pt_list = center_pt_list
+                # if center_pt_list:
+                #     pre_center_pt_list = center_pt_list
 
-                center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
+                # center_pt_list, online_im = get_center_pt_list(online_im, online_ids, online_tlwhs)
 
-                # Draw the direction of each person's center point between frames. 
-                new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
-                # print("new center pt", new_center_pt_list) # center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
+                # # Draw the direction of each person's center point between frames. 
+                # new_center_pt_list = draw_frame_arrow(pre_center_pt_list, center_pt_list, online_im)
+                # # print("new center pt", new_center_pt_list) # center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
+
+                """ DO Transform! (project bbox pts to MMW) """ # time consuming: < 10ms
+                s = datetime.now() 
+                pre_BBOXs = BBOXs # Record previous BBOXs, you can get the directon / still(?)
+                BBOXs = list2BBOXCls(online_ids, online_tlwhs, pre_BBOXs) # convert original data to list[BBOX(), BBOX(), ...]
+                BBOXs = LRM.predict_pos(bbox2MMW_model, BBOXs) # ## predict Xr, Yr in Radar for each BBOX() 
+
+                
+                # visualization
+                for bbox_cls in BBOXs: 
+                    bg_copy = bbox_cls.drawInRadar(bg_copy, pt_color=(0, 0, 0), pt_size=3, showArrow=True) # draw estimated Radar points(Xr, Yr) in radar plane
+                    online_im = bbox_cls.drawInCamera(online_im, pt_color=(0, 0, 255), pt_size=5, showArrow=True) # draw bbox centroid in image 
+                e = datetime.now()  
+                # print("bbox predict time", (e-s).total_seconds())
 
             else:
                 timer.toc()
                 online_im = img_info['raw_img']
 
-            
+
             """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
-            # start = datetime.now()
-            # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-            online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-            online_im, _= process_mmwave_regression(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regression_model=regression_model)
-            # end = datetime.now()  
-            # print("Transform time", (end-start).total_seconds()) # about 1ms.
+            # # start = datetime.now()
+            # # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            # online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            # online_im, _= process_mmwave_regression(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regression_model=regression_model)
+            # # end = datetime.now()  
+            # # print("Transform time", (end-start).total_seconds()) # about 1ms.
 
             """ Match, cal error: find the corresponding person """
             ### px, py, real_dis, ID_mmwave <=> center_u, center_v, esti_dis, ID_img, tlwh, dir_pt (xy_list <=> center_pt_list)
 
-            if outputs[0] is not None:
-                # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
-                online_im, new_mmwave_pts_list, previous_ID_matches, non_match_bbox, total_bbox = pt_match_valid(estimated_uv_list, new_center_pt_list, online_im, non_match_bbox, total_bbox, previous_ID_matches)
 
-                ### after match, show a new mmwave_pt_visual
-                new_bg_copy = copy.deepcopy(bg)
-                new_mmwave_pt_visual = draw_mmwave_pts_sync(new_bg_copy, xy_list=new_mmwave_pts_list)
-                cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
+
+            """ NEW Version: DO Transform (project mmw pts to image) """  # time consuming: < 10ms
+            s1 = datetime.now()   #
+            MMWs = json2MMWCls(sync_mmwave_json) # convert json data to list[MMW(), MMW(), ...]
+            MMWs = LRM.predict_pixel(MMW2bbox_model, MMWs)  ## predict Xc, Yc in image for each MMW() 
+            
+            for mmw_cls in MMWs: # visualization
+                bg_copy = mmw_cls.drawInRadar(bg_img=bg_copy, pt_color=(255, 0, 0), pt_size=3, showArrow=True)  ## draw time_sync MMW points
+                online_im = mmw_cls.drawInCamera(img=online_im, pt_color=(204, 0, 204), pt_size=2, text="", showArrow=True) # draw estimated points(Xc,Yc) in image
+            cv2.imshow("bg_copy", bg_copy)
+
+            e1 = datetime.now()  
+            # print("predict time", (e1-s1).total_seconds())
+
+
+            if outputs[0] is not None:
+                """ NEW Version Match method """ 
+                # input: RADAR: [MMW(), MMW(), ...]
+                #          CAM: [BBOX(), BBOX(), ...]
+
+                s2 = datetime.now()   #
+                MMWs, BBOXs, u_MMWs_idx_list, u_BBOXs_idx_list, matches_idx_list = MMWs_BBOXs_match(MMWs, BBOXs, online_im)
+                
+                ## vis
+                for idx, bbox_cls in enumerate(BBOXs):  # draw in cam image
+                    online_im = bbox_cls.drawCorrespondingMID(online_im) # draw matched MMW_ID in image
+
+                bg_match = copy.deepcopy(bg) ## mmw plane image for MATCH
+                for i, bbox_cls in enumerate(BBOXs): # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
+                    if i in u_BBOXs_idx_list:
+                        bg_match = bbox_cls.drawInRadar(bg_match) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                for mmw_cls in MMWs: 
+                    bg_match = mmw_cls.drawCorrespondingCID(bg_match) # draw matched BBOX_ID in radar plane image
+                cv2.imshow("bg_match", bg_match)
+                
+                e2 = datetime.now()  
+                # print("predict time", (e2-s2).total_seconds())
+
+
+                """ UID """
+                BBOXs, MMWs, BBOXs_UID, MMWs_UID, UID_number = UID_assignment(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID, UID_number)
+                print("MMWs_UID", MMWs_UID)
+                print("BBOXs_UID", BBOXs_UID)
+
+                # vis
+                bg_UID = copy.deepcopy(bg)
+                for i, bbox_cls in enumerate(BBOXs): # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
+                    if i in u_BBOXs_idx_list:
+                        bg_UID = bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                for mmw_cls in MMWs: 
+                    bg_UID = mmw_cls.drawUID(bg_UID) # draw matched BBOX_ID in radar plane image
+                # cv2.imshow("bg_UID", bg_UID)
+
+
+
+                """ vis """
+
+                # define a function for horizontally concatenating images of different heights 
+                def hconcat_resize(img_list, interpolation = cv2.INTER_CUBIC):
+                    # take minimum hights
+                    h_min = min(img.shape[0] 
+                                for img in img_list)
+                    
+                    # image resizing 
+                    im_list_resize = [cv2.resize(img,
+                                    (int(img.shape[1] * h_min / img.shape[0]), h_min),
+                                    interpolation = interpolation) 
+                                    for img in img_list]
+                    
+                    # return final image
+                    return cv2.hconcat(im_list_resize)
+                
+                img_white = 255*np.ones((480, 20, 3), np.uint8)
+                # function calling
+                img_h_resize = hconcat_resize([bg_UID, img_white, online_im])
+                
+                # show the Output image
+                cv2.imshow('hconcat_resize.jpg', img_h_resize)
+
+
+
+                """ FOR USER VIEW img """
+                user_im = copy.deepcopy(frame)
+                for bbox in BBOXs:
+                    user_im = bbox.drawBBOXInCamera(user_im)
+
+                # original MMW img
+                original_MMW_bg = copy.deepcopy(bg)
+                for mmw_cls in MMWs: # visualization
+                    original_MMW_bg = mmw_cls.drawInRadar(bg_img=original_MMW_bg, pt_color=(255, 0, 0), pt_size=3, showArrow=False)  ## draw time_sync MMW points
+
+                User_res_im = hconcat_resize([original_MMW_bg, img_white, bg_UID, img_white, user_im])  
+                cv2.imshow('User_res_im', User_res_im)
+
+
+                # # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
+                # online_im, new_mmwave_pts_list, previous_ID_matches, non_match_bbox, total_bbox = pt_match_valid(estimated_uv_list, new_center_pt_list, online_im, non_match_bbox, total_bbox, previous_ID_matches)
+
+                # ### after match, show a new mmwave_pt_visual
+                # new_bg_copy = copy.deepcopy(bg)
+                # # new_mmwave_pt_visual = draw_mmwave_pts_sync(new_bg_copy, xy_list=new_mmwave_pts_list)
+                # cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
             """!!! mmwave process !!!"""
 
             if args.save_result:
                 vid_writer.write(online_im)
                 if args.demo == "webcam": 
                     origin_vid_writer.write(frame)
-            cv2.imshow("online_im", online_im)
+            # cv2.imshow("online_im", online_im)
             ch = cv2.waitKey(1)
             # if ch == ord("a") or ch == ord("A"):
             #     non_match_bbox+=1
@@ -581,7 +715,9 @@ def main(exp, args):
 
     if args.trt:
         assert not args.fuse, "TensorRT model is not support model fusing!"
-        trt_file = osp.join(output_dir, "model_trt.pth")
+        # trt_file = osp.join(output_dir, "model_trt.pth")
+        trt_file_name = str(args.exp_file.split('/')[-1][:-3])
+        trt_file = osp.join(r"C:\TOBY\jorjin\object_tracking\ByteTrack\YOLOX_outputs", trt_file_name, "model_trt.pth")
         assert osp.exists(
             trt_file
         ), "TensorRT model is not found!\n Run python3 tools/trt.py first!"

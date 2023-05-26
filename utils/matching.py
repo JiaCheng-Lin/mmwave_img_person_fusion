@@ -123,17 +123,17 @@ def MMWs_BBOXs_match(MMWs, BBOXs, img):
         BBOXs[b_idx].MMW_ID = MMWs[m_idx].ID
         # BBOXs[b_idx].matched_MMW = MMWs[m_idx]
     
-    """ for unmatch MMWs """
-    u_MMWs = [] # save all unmatch MMW(); [MMW(), ...]
-    for idx in u_MMWs_idx_list:
-        u_MMWs.append(MMWs[idx])
+    # """ for unmatch MMWs """
+    # u_MMWs = [] # save all unmatch MMW(); [MMW(), ...]
+    # for idx in u_MMWs_idx_list:
+    #     u_MMWs.append(MMWs[idx])
 
-    """ for unmatch MMWs """
-    u_BBOXs = [] # save all unmatch BBOX(); [BBOX(), ...]
-    for idx in u_BBOXs_idx_list:
-        u_BBOXs.append(BBOXs[idx])
+    # """ for unmatch MMWs """
+    # u_BBOXs = [] # save all unmatch BBOX(); [BBOX(), ...]
+    # for idx in u_BBOXs_idx_list:
+    #     u_BBOXs.append(BBOXs[idx])
     
-    return MMWs, BBOXs, u_MMWs, u_BBOXs, matches_idx_list
+    return MMWs, BBOXs, u_MMWs_idx_list, u_BBOXs_idx_list, matches_idx_list
 
 
 

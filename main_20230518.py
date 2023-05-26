@@ -48,7 +48,6 @@ from BBOX import BBOX, list2BBOXCls
 
 from matching import MMWs_BBOXs_match, cal_BBOX_MMW_error
 
-
 def make_parser():
     parser = argparse.ArgumentParser("ByteTrack Demo!")
     parser.add_argument(
@@ -488,7 +487,6 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 # new_center_pt_list: center_pt_x, center_pt_y, fake_dis, online_ids[idx], tlwh, (dir_x, dir_y)
 
 
-
                 """ DO Transform! (project bbox pts to MMW) """ # time consuming: < 10ms
                 s = datetime.now() 
                 pre_BBOXs = BBOXs # Record previous BBOXs, you can get the directon / still(?)
@@ -552,8 +550,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     online_im = bbox_cls.drawCorrespondingMID(online_im) # draw matched MMW_ID in image
 
                 bg_match = copy.deepcopy(bg) ## mmw plane image for MATCH
-                for u_bbox_cls in u_BBOXs: # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
-                    bg_match = u_bbox_cls.drawInRadar(bg_match) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                for i, bbox_cls in enumerate(BBOXs): # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
+                    if i in u_BBOXs_idx_list:
+                        bg_match = bbox_cls.drawInRadar(bg_match) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
                 for mmw_cls in MMWs: 
                     bg_match = mmw_cls.drawCorrespondingCID(bg_match) # draw matched BBOX_ID in radar plane image
                 cv2.imshow("bg_match", bg_match)
@@ -569,13 +568,36 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
                 # vis
                 bg_UID = copy.deepcopy(bg)
-                for u_bbox_cls in u_BBOXs: # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
-                    bg_UID = u_bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                for i, bbox_cls in enumerate(BBOXs): # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
+                    if i in u_BBOXs_idx_list:
+                        bg_UID = bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
                 for mmw_cls in MMWs: 
                     bg_UID = mmw_cls.drawUID(bg_UID) # draw matched BBOX_ID in radar plane image
-                cv2.imshow("bg_UID", bg_UID)
+                # cv2.imshow("bg_UID", bg_UID)
 
+
+                # define a function for horizontally concatenating images of different heights 
+                def hconcat_resize(img_list, interpolation = cv2.INTER_CUBIC):
+                    # take minimum hights
+                    h_min = min(img.shape[0] 
+                                for img in img_list)
+                    
+                    # image resizing 
+                    im_list_resize = [cv2.resize(img,
+                                    (int(img.shape[1] * h_min / img.shape[0]), h_min), 
+                                    interpolation = interpolation) 
+                                    for img in img_list]
+                    
+                    # return final image
+                    return cv2.hconcat(im_list_resize)
                 
+                img_white = 255*np.ones((480, 20, 3), np.uint8)
+                # function calling
+                img_h_resize = hconcat_resize([bg_UID, img_white, online_im])
+                
+                # show the Output image
+                cv2.imshow('hconcat_resize.jpg', img_h_resize)
+
 
 
 
@@ -602,7 +624,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 vid_writer.write(online_im)
                 if args.demo == "webcam": 
                     origin_vid_writer.write(frame)
-            cv2.imshow("online_im", online_im)
+            # cv2.imshow("online_im", online_im)
             
             
             # print("img shape",online_im.shape)
