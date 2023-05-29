@@ -31,14 +31,14 @@ class MMW(object):
             self.Dir = (int(tmp_Vx), int(tmp_Vy))
 
         self.BBOX_ID = None # corresponding BBOX ID
-        # self.matched_BBOX = None  # corresponding BBOX()
+        self.matched_BBOX = None  # corresponding BBOX()
 
         self.UID = None
 
     def addEstimatedXcYc(self, Xc, Yc, imgSize=(640, 480)):
         self.Xc, self.Yc = Xc, Yc
         
-        buffer = 100 # buffer area, when person going to camera image area, 
+        buffer = 80 # buffer area, when person going to camera image area, 
                     # give a buffer area, so the MMW can also have UID.
         if buffer<=Xc<=imgSize[0]-buffer and buffer<=Yc<=imgSize[1]-buffer: # person in Cam img
             self.OutOfImg = False
@@ -59,8 +59,8 @@ class MMW(object):
         cv2.circle(bg_img, self.bg_pt, pt_size, pt_color, -1) 
         
         # draw text
-        info = str(self.ID)  +" ("+str(round(-self.Px, 2))+", "+str(round(self.Py, 2))+") "#+str(self.dis)
-        cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
+        info = str(self.ID)  #+" ("+str(round(-self.Px, 2))+", "+str(round(self.Py, 2))+") "#+str(self.dis)
+        cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.7, (84, 153, 34), 1, cv2.LINE_AA)
         
         # draw arrow line
         if self.Dir and showArrow:

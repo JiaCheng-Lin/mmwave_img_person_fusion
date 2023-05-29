@@ -326,6 +326,20 @@ def draw_frame_arrow(pre, cur, img):
     # print("new_list", new_list)
     return new_list
 
+# define a function for horizontally concatenating images of different heights 
+def hconcat_resize(img_list, interpolation = cv2.INTER_CUBIC):
+    # take minimum hights
+    h_min = min(img.shape[0] 
+                for img in img_list)
+    
+    # image resizing 
+    im_list_resize = [cv2.resize(img,
+                    (int(img.shape[1] * h_min / img.shape[0]), h_min),
+                    interpolation = interpolation) 
+                    for img in img_list]
+    
+    # return final image
+    return cv2.hconcat(im_list_resize)
 
 ## process the video or webcam flow
 def imageflow_demo(predictor, vis_folder, current_time, args):
@@ -372,7 +386,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     new_frame_time = 0
 
     ## save path for image & mmwave
-    folderName = "20230523_032529"  
+    folderName = "20230528_195907_you"  
     abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\img_mmwave_data/"
     data_dir = abs_path+'{}'.format(folderName)
 
@@ -385,18 +399,28 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
     ## save bbox video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output.avi', fourcc, 10.0, (640,  480))
+    out = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output.avi', fourcc, 10.0, (1960,  480))
+    
+    out1 = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_clear.avi', fourcc, 10.0, (1960,  480))
 
+    out_pos = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_pos.avi', fourcc, 10.0, (1300,  480))
+
+    out_centroid = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_centroid.avi', fourcc, 10.0, (1300,  480))
+
+    out_original = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_original.avi', fourcc, 10.0, (1300,  480))
+
+    text_record_path = '../img_mmwave_data/'+folderName+'/output.txt'
+    # f = open(text_record_path, 'w+')
 
 
     # load regression model
     import utils.load_regression_model as LRM
     ### Camera to Radar
-    bbox2MMW_model_name = 'model_bbox2mmw_0.204.ckpt' 
+    bbox2MMW_model_name =  'model_bbox2mmw_0.191.ckpt'  # <- 20230528    # 'model_bbox2mmw_0.230.ckpt' # <- 20230527  # 'model_bbox2mmw_0.204.ckpt' # <- 20230526
     bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
 
     ### Radar to Camera
-    MMW2bbox_model_name = 'model_mmw2bbox_25.740.ckpt' 
+    MMW2bbox_model_name =  'model_mmw2bbox_26.917.ckpt' # <- 20230528   # 'model_mmw2bbox_23.936.ckpt' # 'model_mmw2bbox_25.740.ckpt' 
     MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
     
     match_cnt = 0
@@ -454,6 +478,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1, fps=1. / timer.average_time
                 )
                 
+                # cv2.imshow("byteTrack", online_im)
                 # 
                 # if center_pt_list:
                 #     pre_center_pt_list = center_pt_list
@@ -470,12 +495,17 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 BBOXs = list2BBOXCls(online_ids, online_tlwhs, pre_BBOXs) # convert original data to list[BBOX(), BBOX(), ...]
                 BBOXs = LRM.predict_pos(bbox2MMW_model, BBOXs) # ## predict Xr, Yr in Radar for each BBOX() 
 
-                
+                r = 80
+                # cv2.rectangle(online_im, (r, r), (640-r, 480-r), color=(100,0,0), thickness=2)
+
                 # visualization
                 for bbox_cls in BBOXs: 
-                    bg_copy = bbox_cls.drawInRadar(bg_copy, pt_color=(0, 0, 0), pt_size=3, showArrow=True) # draw estimated Radar points(Xr, Yr) in radar plane
-                    online_im = bbox_cls.drawInCamera(online_im, pt_color=(0, 0, 255), pt_size=5, showArrow=True) # draw bbox centroid in image 
+                    bg_copy = bbox_cls.drawInRadar(bg_copy, pt_color=(0, 143, 255), pt_size=3, showArrow=False) # draw estimated Radar points(Xr, Yr) in radar plane
+                    online_im = bbox_cls.drawInCamera(online_im, pt_color=(0, 0, 255), pt_size=5, showArrow=False) # draw bbox centroid in image 
                 e = datetime.now()  
+                cv2.imshow("online_im", online_im)
+
+                online_im_cp = copy.deepcopy(online_im)
                 # print("bbox predict time", (e-s).total_seconds())
 
             else:
@@ -502,12 +532,21 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             MMWs = LRM.predict_pixel(MMW2bbox_model, MMWs)  ## predict Xc, Yc in image for each MMW() 
             
             for mmw_cls in MMWs: # visualization
-                bg_copy = mmw_cls.drawInRadar(bg_img=bg_copy, pt_color=(255, 0, 0), pt_size=3, showArrow=True)  ## draw time_sync MMW points
-                online_im = mmw_cls.drawInCamera(img=online_im, pt_color=(204, 0, 204), pt_size=2, text="", showArrow=True) # draw estimated points(Xc,Yc) in image
+                bg_copy = mmw_cls.drawInRadar(bg_img=bg_copy, pt_color=(255, 0, 0), pt_size=3, showArrow=False)  ## draw time_sync MMW points
+                online_im = mmw_cls.drawInCamera(img=online_im, pt_color=(204, 0, 204), pt_size=2, text="", showArrow=False) # draw estimated points(Xc,Yc) in image
+            # cv2.imshow("online_im", online_im)
             cv2.imshow("bg_copy", bg_copy)
 
             e1 = datetime.now()  
             # print("predict time", (e1-s1).total_seconds())
+
+
+            img_white = 255*np.ones((480, 20, 3), np.uint8)
+            # function calling
+            im_pos = hconcat_resize([bg_copy, img_white, online_im_cp])
+            cv2.imshow("img_pos", im_pos)
+            # out_pos.write(im_pos)
+
 
 
             if outputs[0] is not None:
@@ -533,6 +572,20 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 e2 = datetime.now()  
                 # print("predict time", (e2-s2).total_seconds())
 
+                """ cal error """ # for Quantitative results
+                for bbox_cls in BBOXs:
+                    if bbox_cls.matched_MMW and bbox_cls:
+                        pixel_error, meter_error = cal_BBOX_MMW_error(bbox_cls.matched_MMW, bbox_cls)
+                        pixel_error_sum += pixel_error
+                        meter_error_sum += meter_error
+                        match_cnt += 1
+                        # print(pixel_error, meter_error)
+                        print("pixel_mean_error", pixel_error_sum/match_cnt)
+                        print("meter_mean_error", meter_error_sum/match_cnt)
+                        # with open(text_record_path, 'w+') as f:
+                        #     f.write(str(match_cnt) + ", pixel_mean_error: " + str(pixel_error_sum/match_cnt) )
+                        #     f.write(str(match_cnt) + ", meter_mean_error: " + str(meter_error_sum/match_cnt) )
+
 
                 """ UID """
                 BBOXs, MMWs, BBOXs_UID, MMWs_UID, UID_number = UID_assignment(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID, UID_number)
@@ -542,38 +595,38 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 # vis
                 bg_UID = copy.deepcopy(bg)
                 for i, bbox_cls in enumerate(BBOXs): # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
-                    if i in u_BBOXs_idx_list:
-                        bg_UID = bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
-                for mmw_cls in MMWs: 
-                    bg_UID = mmw_cls.drawUID(bg_UID) # draw matched BBOX_ID in radar plane image
+                    # if i in u_BBOXs_idx_list:
+                    bg_UID = bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                for i, mmw_cls in enumerate(MMWs): 
+                    if i in u_MMWs_idx_list:
+                        bg_UID = mmw_cls.drawUID(bg_UID) # draw matched BBOX_ID in radar plane image
                 # cv2.imshow("bg_UID", bg_UID)
 
 
 
                 """ vis """
 
-                # define a function for horizontally concatenating images of different heights 
-                def hconcat_resize(img_list, interpolation = cv2.INTER_CUBIC):
-                    # take minimum hights
-                    h_min = min(img.shape[0] 
-                                for img in img_list)
-                    
-                    # image resizing 
-                    im_list_resize = [cv2.resize(img,
-                                    (int(img.shape[1] * h_min / img.shape[0]), h_min),
-                                    interpolation = interpolation) 
-                                    for img in img_list]
-                    
-                    # return final image
-                    return cv2.hconcat(im_list_resize)
+                 # original MMW img
+                original_MMW_bg = copy.deepcopy(bg)
+                for mmw_cls in MMWs: # visualization
+                    original_MMW_bg = mmw_cls.drawInRadar(bg_img=original_MMW_bg, pt_color=(200, 0, 0), pt_size=4, showArrow=False)  ## draw time_sync MMW points
+
                 
+                # im_original = hconcat_resize([original_MMW_bg, img_white, frame])
+                # out_original.write(im_original)
+
+                # im_centroid = hconcat_resize([original_MMW_bg, img_white, online_im])
+                # cv2.imshow("im_centroid", im_centroid)
+                # out_centroid.write(im_centroid)
+
+
                 img_white = 255*np.ones((480, 20, 3), np.uint8)
                 # function calling
-                img_h_resize = hconcat_resize([bg_UID, img_white, online_im])
-                
-                # show the Output image
-                cv2.imshow('hconcat_resize.jpg', img_h_resize)
+                im_debug = hconcat_resize([original_MMW_bg, img_white, bg_UID, img_white, online_im])
 
+                # show the Output image
+                cv2.imshow('im_debug', im_debug)
+                out.write(im_debug) # save UID_result
 
 
                 """ FOR USER VIEW img """
@@ -581,13 +634,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 for bbox in BBOXs:
                     user_im = bbox.drawBBOXInCamera(user_im)
 
-                # original MMW img
-                original_MMW_bg = copy.deepcopy(bg)
-                for mmw_cls in MMWs: # visualization
-                    original_MMW_bg = mmw_cls.drawInRadar(bg_img=original_MMW_bg, pt_color=(255, 0, 0), pt_size=3, showArrow=False)  ## draw time_sync MMW points
 
                 User_res_im = hconcat_resize([original_MMW_bg, img_white, bg_UID, img_white, user_im])  
                 cv2.imshow('User_res_im', User_res_im)
+                # out1.write(User_res_im)
 
 
                 # # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ
@@ -599,10 +649,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 # cv2.imshow("new_mmwave_pt_visual", new_mmwave_pt_visual)
             """!!! mmwave process !!!"""
 
-            if args.save_result:
-                vid_writer.write(online_im)
-                if args.demo == "webcam": 
-                    origin_vid_writer.write(frame)
+            # if args.save_result:
+            #     vid_writer.write(online_im)
+            #     if args.demo == "webcam": 
+            #         origin_vid_writer.write(frame)
             # cv2.imshow("online_im", online_im)
             ch = cv2.waitKey(1)
             # if ch == ord("a") or ch == ord("A"):
@@ -618,12 +668,18 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             if ch == 27 or ch == ord("q") or ch == ord("Q"):
                 # print("non_match", non_match_bbox)
                 # print("total", total_bbox)
+                out.release()
+                out1.release()
+                f.close()
                 break
 
         else:
             break
         frame_id += 1
 
+    out.release()
+    out1.release()
+    f.close()
     # print("non_match", non_match_bbox)
     # print("total", total_bbox)
         

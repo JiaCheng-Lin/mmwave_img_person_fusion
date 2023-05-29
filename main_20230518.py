@@ -404,11 +404,11 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # load regression model
     import utils.load_regression_model as LRM
     ### Camera to Radar
-    bbox2MMW_model_name = 'model_bbox2mmw_0.204.ckpt' 
+    bbox2MMW_model_name = 'model_bbox2mmw_0.191.ckpt' # <- 20230528  # 'model_bbox2mmw_0.204.ckpt'  # <- 20230526
     bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
 
     ### Radar to Camera
-    MMW2bbox_model_name = 'model_mmw2bbox_25.740.ckpt' 
+    MMW2bbox_model_name = 'model_mmw2bbox_26.917.ckpt' # <- 20230528  # 'model_mmw2bbox_25.740.ckpt' # <- 20230526
     MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
     
     match_cnt = 0
@@ -479,6 +479,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1, fps=1. / timer.average_time
                 )
                 
+                
                 # pre_center_pt_list = center_pt_list
                 # center_pt_list, online_im, tmp_pt_list, regression_pt_list = get_center_pt_list(online_im, online_ids, online_tlwhs) # tmp_pt_list: for perspective transform
 
@@ -543,7 +544,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 #          CAM: [BBOX(), BBOX(), ...]
 
                 s2 = datetime.now()   #
-                MMWs, BBOXs, u_MMWs, u_BBOXs, matches_idx_list = MMWs_BBOXs_match(MMWs, BBOXs, online_im)
+                MMWs, BBOXs, u_MMWs_idx_list, u_BBOXs_idx_list, matches_idx_list = MMWs_BBOXs_match(MMWs, BBOXs, online_im)
                 
                 ## vis
                 for idx, bbox_cls in enumerate(BBOXs):  # draw in cam image
