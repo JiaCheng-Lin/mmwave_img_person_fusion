@@ -46,6 +46,25 @@ class bbox2MMW_Model(nn.Module):
         super(bbox2MMW_Model, self).__init__()
         # TODO: modify model's structure, be aware of dimensions. 
         self.layers = nn.Sequential(
+            # nn.Linear(input_dim, 8),
+            # nn.ReLU(),
+            
+            # nn.Linear(8, 16),
+            # nn.ReLU(),
+            
+            # nn.Linear(16, 32),
+            # nn.ReLU(),
+            
+            # nn.Linear(32, 16),
+            # nn.ReLU(),
+            
+            # nn.Linear(16, 8),
+            # nn.ReLU(),
+            
+            # nn.Linear(8, 2)
+
+
+            ### 20230530
             nn.Linear(input_dim, 8),
             nn.ReLU(),
             
@@ -53,6 +72,12 @@ class bbox2MMW_Model(nn.Module):
             nn.ReLU(),
             
             nn.Linear(16, 32),
+            nn.ReLU(),
+            
+            nn.Linear(32, 64),
+            nn.ReLU(),
+            
+            nn.Linear(64, 32),
             nn.ReLU(),
             
             nn.Linear(32, 16),
@@ -76,20 +101,35 @@ class MMW2bbox_Model(nn.Module):
         super(MMW2bbox_Model, self).__init__()
         # TODO: modify model's structure, be aware of dimensions. 
         self.layers = nn.Sequential(
-            nn.Linear(input_dim, 8),
-            nn.ReLU(),
+            # nn.Linear(input_dim, 8),
+            # nn.ReLU(),
             
-            nn.Linear(8, 16),
-            nn.ReLU(),
+            # nn.Linear(8, 16),
+            # nn.ReLU(),
             
-            nn.Linear(16, 32),
-            nn.ReLU(),
+            # nn.Linear(16, 32),
+            # nn.ReLU(),
 
-            nn.Linear(32, 8),
+            # nn.Linear(32, 8),
+            # nn.ReLU(),
+            
+            # nn.Linear(8, 2)
+
+
+            ### 20230530
+            nn.Linear(input_dim, 32),
             nn.ReLU(),
             
-            nn.Linear(8, 2)
-
+            nn.Linear(32, 64),
+            nn.ReLU(),
+            
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            
+            nn.Linear(16, 2)
         )
 
     def forward(self, x):

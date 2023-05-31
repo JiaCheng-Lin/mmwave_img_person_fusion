@@ -47,7 +47,8 @@ def sameDir(MMW_dir, BBOX_dir):
             return False 
     return True # have not dir / dir_dot>=0 (degree<=90)
 
-def CalErrorMatrix(MMWs, BBOXs, error_threshold=150):
+def CalErrorMatrix(MMWs, BBOXs, error_threshold=150, \
+                   pixel_weight=1, meter_weight=100):
     unmatch_value = 1e6 
     error_mtx = [] # m x n
     
@@ -56,7 +57,7 @@ def CalErrorMatrix(MMWs, BBOXs, error_threshold=150):
         for bbox_cls in BBOXs:
             if checkWithinBbox(mmw_cls, bbox_cls) == True: # MMW() in bbox
                 pixel_error, meter_error = cal_BBOX_MMW_error(mmw_cls, bbox_cls) # cal th err
-                error = pixel_error*1 + meter_error*100 # weight
+                error = pixel_error*pixel_weight + meter_error*meter_weight # weight
 
                 if error>error_threshold: # or sameDir(mmw_cls.Dir, bbox_cls.Dir)==False: 
                     row_error_mtx.append(unmatch_value) #  give a large number to <error mtx>

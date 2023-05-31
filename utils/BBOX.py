@@ -95,12 +95,11 @@ class BBOX(object):
             else :
                 pt_color = unmatch_color
 
-
             cv2.circle(bg_img, self.bg_pt, pt_size, pt_color, -1)  # draw bg_pt point
             info = str(self.UID) + " " + str(self.MMW_ID) + " " + str(self.ID) 
             cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
         
-        return bg_img
+        return bg_img, self.UID
 
     def drawBBOXInCamera(self, img):
         cv2.rectangle(img, (self.Xmin, self.Ymin), (self.Xmax, self.Ymax), color=(100,0,0), thickness=2) # bbox
