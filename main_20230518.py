@@ -576,10 +576,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     if uid_bbox != None:
                         UID_record.append(uid_bbox)
 
-                for mmw_cls in MMWs: 
+                for i, mmw_cls in enumerate(MMWs): 
                     if i in u_MMWs_idx_list:
                         bg_UID = mmw_cls.drawUID(bg_UID, UID_record) # draw matched BBOX_ID in radar plane image
-                        
+
                     # bg_UID = mmw_cls.drawUID(bg_UID) # draw matched BBOX_ID in radar plane image
                 # cv2.imshow("bg_UID", bg_UID)
 

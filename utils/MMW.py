@@ -38,7 +38,7 @@ class MMW(object):
     def addEstimatedXcYc(self, Xc, Yc, imgSize=(640, 480)):
         self.Xc, self.Yc = Xc, Yc
         
-        buffer = 80 # buffer area, when person going to camera image area, 
+        buffer = 130 # buffer area, when person going to camera image area, 
                     # give a buffer area, so the MMW can also have UID.
         if buffer<=Xc<=imgSize[0]-buffer and buffer<=Yc<=imgSize[1]-buffer: # person in Cam img
             self.OutOfImg = False
@@ -99,7 +99,7 @@ class MMW(object):
         
         return bg_img
     
-    def drawUID(self, bg_img, UID_record, pt_size=3, unmatch_MMW_pt_color=(232, 229, 26)):
+    def drawUID(self, bg_img, UID_record, pt_size=3, unmatch_MMW_pt_color=(200, 0, 0)):
         # draw text 
         if self.UID and not (self.UID in UID_record): # not None  
             cv2.circle(bg_img, self.bg_pt, pt_size, unmatch_MMW_pt_color, -1)  # draw bg_pt point

@@ -63,6 +63,7 @@ def CalErrorMatrix(MMWs, BBOXs, error_threshold=150, \
                     row_error_mtx.append(unmatch_value) #  give a large number to <error mtx>
                 else:
                     row_error_mtx.append(error) # add to error mtx
+                    print(mmw_cls.ID, bbox_cls.ID, error)
 
             else: 
                 row_error_mtx.append(unmatch_value)  # not in the bbox -> give a large number to <error mtx>

@@ -28,31 +28,32 @@ def checkUIDExists(BBOXs, MMWs, BBOXs_UID, MMWs_UID):
 
 def processMatch(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID):
     for m_idx, b_idx in matches_idx_list:
+        print(MMWs[m_idx].ID, ": ", MMWs[m_idx].UID )
+        print(BBOXs[b_idx].ID, ": ", BBOXs[b_idx].UID,)
 
         # # if MMW() has UID -> than match with no_UID_BBOX() -> BBOX get this UID.
-        if MMWs[m_idx].UID and BBOXs[b_idx].UID==None:
+        if MMWs[m_idx].UID != None and BBOXs[b_idx].UID == None:
             BBOXs[b_idx].UID = MMWs[m_idx].UID
             BBOXs_UID[BBOXs[b_idx].ID] = BBOXs[b_idx].UID 
 
         # # if MMW() in image and No UID, but BBOX() has UID
-        if MMWs[m_idx].UID==None and BBOXs[b_idx].UID:
+        if MMWs[m_idx].UID == None and BBOXs[b_idx].UID != None:
             MMWs[m_idx].UID = BBOXs[b_idx].UID
             MMWs_UID[MMWs[m_idx].ID] = MMWs[m_idx].UID
 
 
-        # # # if MMW() has UID && BBOX() has UID -> match 
-        # # # -> change MMW()'s UID to BBOX()'s UID
-        # if MMWs[m_idx].UID and BBOXs[b_idx].UID and (MMWs[m_idx].UID != BBOXs[b_idx].UID):
-        #     print("!!!!! both have UID but not same !!!!!")
-        #     MMWs[m_idx].UID = BBOXs[b_idx].UID
-        #     MMWs_UID[MMWs[m_idx].ID] = MMWs[m_idx].UID
+        # # if MMW() has UID && BBOX() has UID -> match 
+        # # -> change MMW()'s UID to BBOX()'s UID
+        if MMWs[m_idx].UID and BBOXs[b_idx].UID and (MMWs[m_idx].UID != BBOXs[b_idx].UID):
+            print("!!!!! both have UID but not same !!!!!")
+            MMWs[m_idx].UID = BBOXs[b_idx].UID
+            MMWs_UID[MMWs[m_idx].ID] = MMWs[m_idx].UID
 
-        # # print(MMWs[m_idx].UID, BBOXs[b_idx].UID)
+        # print(MMWs[m_idx].UID, BBOXs[b_idx].UID)
 
     return MMWs, BBOXs, BBOXs_UID, MMWs_UID
 
 def UID_assignment(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID, UID_number):
-
     MMWs_UID = filter_MMWs_UID(MMWs, MMWs_UID) # remove <MMW_ID in MMWs_UID dict>(relationship) if MMW_ID is not exist in MMWs list.
     
     # Check the <BBOXs> and <MMWs out of image> 

@@ -355,10 +355,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         save_path = osp.join(save_folder, args.path.split("/")[-1])
     else:
         save_path = osp.join(save_folder, "camera.mp4")
-    logger.info(f"video save_path is {save_path}")
-    vid_writer = cv2.VideoWriter(
-        save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
-    )
+    # logger.info(f"video save_path is {save_path}")
+    # vid_writer = cv2.VideoWriter(
+    #     save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
+    # )
     if args.demo == "webcam": 
         origin_vid_writer = cv2.VideoWriter(
             osp.join(save_folder, "origin_camera.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
@@ -392,7 +392,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     new_frame_time = 0
 
     ## save path for image & mmwave
-    folderName = "20230529_004355"  
+    folderName = "20230601_025345"  
     abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\img_mmwave_data/"
     data_dir = abs_path+'{}'.format(folderName)
 
@@ -405,9 +405,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
     ## save bbox video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-#     out = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output.avi', fourcc, 10.0, (1960,  480))
+    out = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output.avi', fourcc, 10.0, (1960,  480))
     
-#     out1 = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_clear.avi', fourcc, 10.0, (1960,  480))
+    out1 = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_clear.avi', fourcc, 10.0, (1960,  480))
 
 #     out_pos = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_pos.avi', fourcc, 10.0, (1300,  480))
 # ``
@@ -422,11 +422,11 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # load regression model
     import utils.load_regression_model as LRM
     ### Camera to Radar
-    bbox2MMW_model_name = "model_bbox2mmw_0.188.ckpt" # <- 20230530  # 'model_bbox2mmw_0.191.ckpt' # <- 20230528  # 'model_bbox2mmw_0.204.ckpt'  # <- 20230526
+    bbox2MMW_model_name = "model_bbox2mmw_0.188.ckpt"  # "model_bbox2mmw_0.188.ckpt" # <- 20230530  # 'model_bbox2mmw_0.191.ckpt' # <- 20230528  # 'model_bbox2mmw_0.204.ckpt'  # <- 20230526
     bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
 
     ### Radar to Camera
-    MMW2bbox_model_name = "model_mmw2bbox_25.004.ckpt" # <- 20230530 # 'model_mmw2bbox_26.917.ckpt' # <- 20230528  # 'model_mmw2bbox_25.740.ckpt' # <- 20230526
+    MMW2bbox_model_name = "model_mmw2bbox_25.004.ckpt"  # "model_mmw2bbox_25.004.ckpt" # <- 20230530 # 'model_mmw2bbox_26.917.ckpt' # <- 20230528  # 'model_mmw2bbox_25.740.ckpt' # <- 20230526
     MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
     
     match_cnt = 0
@@ -501,8 +501,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 BBOXs = list2BBOXCls(online_ids, online_tlwhs, pre_BBOXs) # convert original data to list[BBOX(), BBOX(), ...]
                 BBOXs = LRM.predict_pos(bbox2MMW_model, BBOXs) # ## predict Xr, Yr in Radar for each BBOX() 
 
-                r = 80
-                # cv2.rectangle(online_im, (r, r), (640-r, 480-r), color=(100,0,0), thickness=2)
+                r = 150
+                cv2.rectangle(online_im, (r, r), (640-r, 480-r), color=(100,0,0), thickness=2)
 
                 # visualization
                 for bbox_cls in BBOXs: 
@@ -653,7 +653,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
                 # show the Output image
                 cv2.imshow('im_debug', im_debug)
-                # out.write(im_debug) # save UID_result
+                out.write(im_debug) # save UID_result
 
 
                 """ FOR USER VIEW img """
@@ -664,7 +664,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
                 User_res_im = hconcat_resize([original_MMW_bg, img_white, bg_UID, img_white, user_im])  
                 cv2.imshow('User_res_im', User_res_im)
-                # out1.write(User_res_im)
+                out1.write(User_res_im)
 
 
                 # # new_mmwave_pts_list: show mmwave pts, ID_matches: record ID_match, previ

@@ -46,6 +46,7 @@ class bbox2MMW_Model(nn.Module):
         super(bbox2MMW_Model, self).__init__()
         # TODO: modify model's structure, be aware of dimensions. 
         self.layers = nn.Sequential(
+            # ### 20230528
             # nn.Linear(input_dim, 8),
             # nn.ReLU(),
             
@@ -101,6 +102,7 @@ class MMW2bbox_Model(nn.Module):
         super(MMW2bbox_Model, self).__init__()
         # TODO: modify model's structure, be aware of dimensions. 
         self.layers = nn.Sequential(
+            ### 20230528
             # nn.Linear(input_dim, 8),
             # nn.ReLU(),
             

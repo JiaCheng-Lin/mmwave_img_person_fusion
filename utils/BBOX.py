@@ -92,20 +92,29 @@ class BBOX(object):
         if self.UID: # not None
             if self.MMW_ID != None and self.ID != None :
                 pt_color = match_pt_color
+                pt = self.matched_MMW.bg_pt
             else :
                 pt_color = unmatch_color
+                pt = self.bg_pt
 
-            cv2.circle(bg_img, self.bg_pt, pt_size, pt_color, -1)  # draw bg_pt point
+            cv2.circle(bg_img, pt, pt_size, pt_color, -1)  # draw bg_pt point
             info = str(self.UID) + " " + str(self.MMW_ID) + " " + str(self.ID) 
-            cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
+            cv2.putText(bg_img, info, (pt[0]+5, pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
         
         return bg_img, self.UID
 
-    def drawBBOXInCamera(self, img):
-        cv2.rectangle(img, (self.Xmin, self.Ymin), (self.Xmax, self.Ymax), color=(100,0,0), thickness=2) # bbox
+    def drawBBOXInCamera(self, img, unmatch_color=(0, 143, 255), match_color=(232, 229, 26)):
+        if self.UID: # not None
+            if self.MMW_ID != None and self.ID != None :
+                color = match_color
+            else :
+                color = unmatch_color
 
-        info = str(self.UID) + "-" + str(self.MMW_ID) + "-" + str(self.ID)
-        cv2.putText(img, info, (self.Xmin, self.Ymin), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.1, (255, 255, 34), 1, cv2.LINE_AA)
+
+            cv2.rectangle(img, (self.Xmin, self.Ymin), (self.Xmax, self.Ymax), color=color, thickness=2) # bbox
+
+            info = str(self.UID) + "-" + str(self.MMW_ID) + "-" + str(self.ID)
+            cv2.putText(img, info, (self.Xmin, self.Ymin), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.1, color, 1, cv2.LINE_AA)
         
         return img
 
