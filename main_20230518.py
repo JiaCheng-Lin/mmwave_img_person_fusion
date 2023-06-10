@@ -404,11 +404,13 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # load regression model
     import utils.load_regression_model as LRM
     ### Camera to Radar
-    bbox2MMW_model_name = "model_bbox2mmw_0.188.ckpt" # <- 20230530  # 'model_bbox2mmw_0.191.ckpt' # <- 20230528  # 'model_bbox2mmw_0.204.ckpt'  # <- 20230526
+    bbox2MMW_model_name = "model_bbox2mmw_0.184.ckpt" 
+    # "model_bbox2mmw_0.184.ckpt" # <- 20230602_2  # "model_bbox2mmw_0.318.ckpt" # <- 20230602_1  # "model_bbox2mmw_0.188.ckpt" # <- 20230530  # 'model_bbox2mmw_0.191.ckpt' # <- 20230528  # 'model_bbox2mmw_0.204.ckpt'  # <- 20230526
     bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
 
     ### Radar to Camera
-    MMW2bbox_model_name = "model_mmw2bbox_25.004.ckpt" # <- 20230530 # 'model_mmw2bbox_26.917.ckpt' # <- 20230528  # 'model_mmw2bbox_25.740.ckpt' # <- 20230526
+    MMW2bbox_model_name = "model_mmw2bbox_11.715.ckpt" 
+    # "model_mmw2bbox_11.715.ckpt" # <- 20230602_2 # "model_mmw2bbox_19.217.ckpt" # <- 20230602_1 # "model_mmw2bbox_25.004.ckpt" # <- 20230530 # 'model_mmw2bbox_26.917.ckpt' # <- 20230528  # 'model_mmw2bbox_25.740.ckpt' # <- 20230526
     MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
     
     match_cnt = 0
@@ -419,6 +421,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     UID_number = 0 # init
     BBOXs_UID = {}
     MMWs_UID = {}
+
+    # add UID Trace
+    from UID import UID_Trace
+    uid_trace = UID_Trace()
 
     while True:
         # if frame_id % 20 == 0:
@@ -561,7 +567,6 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 e2 = datetime.now()  
                 # print("predict time", (e2-s2).total_seconds())
 
-
                 """ UID """
                 BBOXs, MMWs, BBOXs_UID, MMWs_UID, UID_number = UID_assignment(MMWs, BBOXs, matches_idx_list, BBOXs_UID, MMWs_UID, UID_number)
                 print("MMWs_UID", MMWs_UID)
@@ -572,15 +577,14 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 UID_record = [] # Prevent the same UID from appearing in the screen, so record it
                 for i, bbox_cls in enumerate(BBOXs): # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
                     # if i in u_BBOXs_idx_list:
-                    bg_UID, uid_bbox = bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
-                    if uid_bbox != None:
-                        UID_record.append(uid_bbox)
+                    bg_UID, bbox_uid, uid_trace = bbox_cls.drawUIDInRadar(bg_UID, uid_trace) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                    if bbox_uid != None:
+                        UID_record.append(bbox_uid)
 
                 for i, mmw_cls in enumerate(MMWs): 
                     if i in u_MMWs_idx_list:
-                        bg_UID = mmw_cls.drawUID(bg_UID, UID_record) # draw matched BBOX_ID in radar plane image
+                        bg_UID, uid_trace = mmw_cls.drawUID(bg_UID, UID_record, uid_trace) # draw matched BBOX_ID in radar plane image
 
-                    # bg_UID = mmw_cls.drawUID(bg_UID) # draw matched BBOX_ID in radar plane image
                 # cv2.imshow("bg_UID", bg_UID)
 
 

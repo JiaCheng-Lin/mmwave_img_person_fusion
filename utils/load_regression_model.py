@@ -18,6 +18,13 @@ from torch.utils.data import Dataset, DataLoader, random_split
 # For plotting learning curve
 from torch.utils.tensorboard import SummaryWriter
 
+## for regression model prediction. (mmwave pt project to image)
+from joblib import dump, load # save and load model.
+from sklearn.model_selection import train_test_split # split data to train&test
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, RANSACRegressor
+from sklearn.preprocessing import PolynomialFeatures # Polynomial
+from sklearn.pipeline import make_pipeline
+
 
 class cam_mmw(Dataset):
     '''
@@ -46,7 +53,8 @@ class bbox2MMW_Model(nn.Module):
         super(bbox2MMW_Model, self).__init__()
         # TODO: modify model's structure, be aware of dimensions. 
         self.layers = nn.Sequential(
-            # ### 20230528
+
+            # # ### 20230528
             # nn.Linear(input_dim, 8),
             # nn.ReLU(),
             
@@ -65,7 +73,7 @@ class bbox2MMW_Model(nn.Module):
             # nn.Linear(8, 2)
 
 
-            ### 20230530
+            ### 20230530 &&  20230602
             nn.Linear(input_dim, 8),
             nn.ReLU(),
             
@@ -118,7 +126,7 @@ class MMW2bbox_Model(nn.Module):
             # nn.Linear(8, 2)
 
 
-            ### 20230530
+            ### 20230530 && 20230602
             nn.Linear(input_dim, 32),
             nn.ReLU(),
             
@@ -208,7 +216,23 @@ def predict_pixel(model, MMWs): # data: np array, [[px, py, vx, vy, ax, ay], ...
         # return np.concatenate((preds, np.array([data[:, -1]]).T), axis=1) # concat with MMW ID
     return []
 
+def predict_pixel_linear_transform(T, MMWs):
+    for i, a in enumerate(MMWs):
+        
+        T_uv = np.matmul(T,  np.array([a.Px, a.Py, 1]))
+        MMWs[i].T_Xc, MMWs[i].T_Yc= int(T_uv[0]/T_uv[2]), int(T_uv[1]/T_uv[2])
+        # print(T_uv)
 
+    return MMWs
+
+def predict_pixel_regression(regressor, MMWs):
+    for i, a in enumerate(MMWs):
+        
+        reg_uv = regressor.predict(np.array([[a.Px, a.Py]])) # origin 
+        MMWs[i].reg_Xc, MMWs[i].reg_Yc = int(reg_uv[0][0]), int(reg_uv[0][1])
+        # print(reg_uv)
+
+    return MMWs
 # if __name__ == '__main__':
 
     # test_dataset =  bbox2MMW_Model(np.array([[104.        , 245.        , 105.26521565, 294.57442337]]))

@@ -2,6 +2,13 @@ import numpy as np
 import cv2  
 import math
 
+## for regression model prediction. (mmwave pt project to image)
+from joblib import dump, load # save and load model.
+from sklearn.model_selection import train_test_split # split data to train&test
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, RANSACRegressor
+from sklearn.preprocessing import PolynomialFeatures # Polynomial
+from sklearn.pipeline import make_pipeline
+
 ## Define a mmwave radar point class
 class MMW(object):
     def __init__(self, Px, Py, ID=None, Vx=None, Vy=None, \
@@ -35,10 +42,14 @@ class MMW(object):
 
         self.UID = None
 
+
+        self.reg_Xc, self.reg_Yc = None, None # for regression
+        self.T_Xc, self.T_Yc = None, None # for linear transform
+
     def addEstimatedXcYc(self, Xc, Yc, imgSize=(640, 480)):
         self.Xc, self.Yc = Xc, Yc
         
-        buffer = 130 # buffer area, when person going to camera image area, 
+        buffer = 100 # buffer area, when person going to camera image area, 
                     # give a buffer area, so the MMW can also have UID.
         if buffer<=Xc<=imgSize[0]-buffer and buffer<=Yc<=imgSize[1]-buffer: # person in Cam img
             self.OutOfImg = False
@@ -99,14 +110,20 @@ class MMW(object):
         
         return bg_img
     
-    def drawUID(self, bg_img, UID_record, pt_size=3, unmatch_MMW_pt_color=(200, 0, 0)):
+    def drawUID(self, bg_img, UID_record, uid_trace, pt_size=5, unmatch_MMW_pt_color=(200, 0, 0)):
         # draw text 
         if self.UID and not (self.UID in UID_record): # not None  
+            # bg_img = uid_trace.draw(bg_img, self.UID) # draw trace
+
             cv2.circle(bg_img, self.bg_pt, pt_size, unmatch_MMW_pt_color, -1)  # draw bg_pt point
             info = str(self.UID) + " " + str(self.ID) + " " + str(self.BBOX_ID)
             cv2.putText(bg_img, info, (self.bg_pt[0]+5, self.bg_pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
-        
-        return bg_img
+            
+            
+
+            uid_trace.addTrace(self.UID, self.bg_pt) # add trace 
+            
+        return bg_img, uid_trace
 
 # Convert <mmwave Json file> to <list contains MMW() class.
 def json2MMWCls(MMW_json, origin_px=6.0, origin_py=1.0): # # origin_px/py: jorjin Device original point 

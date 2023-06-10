@@ -44,7 +44,7 @@ from MMW import MMW, json2MMWCls
 ## BBOX
 from BBOX import BBOX, list2BBOXCls
 
-from matching import MMWs_BBOXs_match, cal_BBOX_MMW_error
+from matching import MMWs_BBOXs_match, cal_BBOX_MMW_error, cal_BBOX_MMW_error_T, cal_BBOX_MMW_error_reg
 
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
@@ -378,13 +378,23 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     bg = cv2.imread(r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\inference\utils/mmwave_bg_1.png")
     
     ## linear transform
-    T = [[-166.12528043805855, 9.46300507634681, 267.52812845842385], 
-         [-5.914938721750993, -84.10366441389223, 584.2169477441553], 
-         [-1.7954387976359953e-16, -5.936006894358137e-16, 1.0000000000000027]]
+    # T = [[-166.12528043805855, 9.46300507634681, 267.52812845842385], 
+    #      [-5.914938721750993, -84.10366441389223, 584.2169477441553], 
+    #      [-1.7954387976359953e-16, -5.936006894358137e-16, 1.0000000000000027]] # 5028
+
+    # 0531
+    # T = [[-153.2591695405736, -1.7780367770580654, 310.39442054849366], [0.9353506469584174, -79.8417625783474, 571.7968924805816], [-2.664426838883127e-16, 3.4889625910583533e-16, 0.9999999999999981]]
+
+    # 0602_1
+    T = [[-154.08806675451797, 19.667866366709863, 230.8336438554034], [5.498033790090365, -46.23834933510854, 471.7999020002187], [1.4825380506566788e-15, -1.974982677399595e-15, 1.0000000000000044]]
+    
+    # 0602_2
+    T = [[-165.21602912553593, -17.71554462896459, 437.3219185322199], [19.990480147894118, -79.99894328147033, 567.0347078445026], [-5.7941390400884085e-15, 2.8880977470668867e-15, 0.9999999999999926]]
 
 
     # # regression model initialization (mmwave pts project to img)
-    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_05_28_16_20_17.joblib') 
+    regressor = load(r'C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\cal_tranform_matrix\data/data_2023_06_02_23_33_37.joblib') 
+
     t_total = 0 # time_error_sum
     t_cnt = 0 # time count
 
@@ -392,7 +402,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     new_frame_time = 0
 
     ## save path for image & mmwave
-    folderName = "20230601_025345"  
+    folderName = "20230603_002335"  
     abs_path = r"C:\TOBY\jorjin\MMWave\mmwave_webcam_fusion\inference\byteTrack_mmwave\img_mmwave_data/"
     data_dir = abs_path+'{}'.format(folderName)
 
@@ -409,11 +419,11 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     
     out1 = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_clear.avi', fourcc, 10.0, (1960,  480))
 
-#     out_pos = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_pos.avi', fourcc, 10.0, (1300,  480))
-# ``
-#     out_centroid = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_centroid.avi', fourcc, 10.0, (1300,  480))
+    out_pos = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_pos.avi', fourcc, 10.0, (1300,  480))
 
-#     out_original = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_original.avi', fourcc, 10.0, (1300,  480))
+    out_centroid = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_centroid.avi', fourcc, 10.0, (1300,  480))
+
+    # out_original = cv2.VideoWriter('../img_mmwave_data/'+folderName+'/output_original.avi', fourcc, 10.0, (1300,  480))
 
     text_record_path = '../img_mmwave_data/'+folderName+'/output.txt'
     # f = open(text_record_path, 'w+')
@@ -422,15 +432,19 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     # load regression model
     import utils.load_regression_model as LRM
     ### Camera to Radar
-    bbox2MMW_model_name = "model_bbox2mmw_0.188.ckpt"  # "model_bbox2mmw_0.188.ckpt" # <- 20230530  # 'model_bbox2mmw_0.191.ckpt' # <- 20230528  # 'model_bbox2mmw_0.204.ckpt'  # <- 20230526
+    bbox2MMW_model_name = "model_bbox2mmw_0.184.ckpt" 
+     # "model_bbox2mmw_0.184.ckpt" # <- 20230602_2 # "model_bbox2mmw_0.318.ckpt" # <- 20230602_1    # "model_bbox2mmw_0.188.ckpt" # <- 20230530  # 'model_bbox2mmw_0.191.ckpt' # <- 20230528  # 'model_bbox2mmw_0.204.ckpt'  # <- 20230526
     bbox2MMW_model = LRM.get_bbox2MMW_regression_model(bbox2MMW_model_name, input_dim=2)
 
     ### Radar to Camera
-    MMW2bbox_model_name = "model_mmw2bbox_25.004.ckpt"  # "model_mmw2bbox_25.004.ckpt" # <- 20230530 # 'model_mmw2bbox_26.917.ckpt' # <- 20230528  # 'model_mmw2bbox_25.740.ckpt' # <- 20230526
+    MMW2bbox_model_name = "model_mmw2bbox_11.715.ckpt" 
+    # "model_mmw2bbox_11.715.ckpt" # <- 20230602_2  # "model_mmw2bbox_19.217.ckpt" # <- 20230602_1   # "model_mmw2bbox_25.004.ckpt" # <- 20230530 # 'model_mmw2bbox_26.917.ckpt' # <- 20230528  # 'model_mmw2bbox_25.740.ckpt' # <- 20230526
     MMW2bbox_model = LRM.get_MMW2bbox_regression_model(MMW2bbox_model_name, input_dim=6)
     
     match_cnt = 0
     pixel_error_sum, meter_error_sum = 0, 0
+    pixel_error_sum_reg, meter_error_sum_reg = 0, 0
+    pixel_error_sum_T, meter_error_sum_T = 0, 0
 
     ## UID assignment
     from UID import UID_assignment
@@ -438,6 +452,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     BBOXs_UID = {}
     MMWs_UID = {}
     
+    # add UID Trace
+    from UID import UID_Trace
+    uid_trace = UID_Trace()
+
 
     for filename in os.listdir(data_dir):
 
@@ -501,8 +519,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 BBOXs = list2BBOXCls(online_ids, online_tlwhs, pre_BBOXs) # convert original data to list[BBOX(), BBOX(), ...]
                 BBOXs = LRM.predict_pos(bbox2MMW_model, BBOXs) # ## predict Xr, Yr in Radar for each BBOX() 
 
-                r = 150
-                cv2.rectangle(online_im, (r, r), (640-r, 480-r), color=(100,0,0), thickness=2)
+                r = 130
+                # cv2.rectangle(online_im, (r, r), (640-r, 480-r), color=(100,0,0), thickness=2)
 
                 # visualization
                 for bbox_cls in BBOXs: 
@@ -522,7 +540,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             """ DO Transform! (project mmwave pts to img) """ # y_list: [[px, py, real_dis, ID], ], 
             # # start = datetime.now()
             # online_im, _ = process_mmwave(ori_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
-            online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
+            # online_im, estimated_uv_list = process_mmwave_sync(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regressor=regressor)
             # online_im, _= process_mmwave_regression(sync_mmwave_json, online_im, origin_px=6.0, origin_py=1.0, regression_model=regression_model)
             # # end = datetime.now()  
             # # print("Transform time", (end-start).total_seconds()) # about 1ms.
@@ -538,6 +556,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             """ NEW Version: DO Transform (project mmw pts to image) """ # time consuming: < 10ms
             s1 = datetime.now()   #
             MMWs = LRM.predict_pixel(MMW2bbox_model, MMWs)  ## predict Xc, Yc in image for each MMW() 
+            MMWs = LRM.predict_pixel_regression(regressor, MMWs)
+            MMWs = LRM.predict_pixel_linear_transform(T, MMWs)
+
+            
             
             # visualization
             for mmw_cls in MMWs: 
@@ -550,7 +572,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             # print("predict time", (e1-s1).total_seconds())
 
 
-            """ regression: (project mmw pts to image) """  # method comparison
+            """ regression model: (project mmw pts to image) """  # method comparison
             s1 = datetime.now()   #
             MMWs = LRM.predict_pixel(MMW2bbox_model, MMWs)  ## predict Xc, Yc in image for each MMW() 
             
@@ -568,7 +590,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
             # function calling
             im_pos = hconcat_resize([bg_copy, img_white, online_im_cp])
             cv2.imshow("img_pos", im_pos)
-            # out_pos.write(im_pos)
+            out_pos.write(im_pos)
 
 
 
@@ -602,12 +624,23 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                         pixel_error_sum += pixel_error
                         meter_error_sum += meter_error
                         match_cnt += 1
+
+                        pixel_error_sum_reg += cal_BBOX_MMW_error_reg(bbox_cls.matched_MMW, bbox_cls)
+                        pixel_error_sum_T += cal_BBOX_MMW_error_T(bbox_cls.matched_MMW, bbox_cls)
+
                         # print(pixel_error, meter_error)
                         print("pixel_mean_error", pixel_error_sum/match_cnt)
                         print("meter_mean_error", meter_error_sum/match_cnt)
-                        # with open(text_record_path, 'w+') as f:
-                        #     f.write(str(match_cnt) + ", pixel_mean_error: " + str(pixel_error_sum/match_cnt) )
-                        #     f.write(str(match_cnt) + ", meter_mean_error: " + str(meter_error_sum/match_cnt) )
+
+                        print("pixel_mean_error_reg", pixel_error_sum_reg/match_cnt)
+                        print("pixel_mean_error_T", pixel_error_sum_T/match_cnt)
+
+                        with open(text_record_path, 'w+') as f:
+                            f.write(str(match_cnt) + ", pixel_mean_error: " + str(pixel_error_sum/match_cnt) )
+                            f.write(str(match_cnt) + ", meter_mean_error: " + str(meter_error_sum/match_cnt) )
+
+                            f.write(str(match_cnt) + ", pixel_mean_error_reg: " + str(pixel_error_sum_reg/match_cnt) )
+                            f.write(str(match_cnt) + ", pixel_mean_error_T: " + str(pixel_error_sum_T/match_cnt) )
 
 
                 """ UID """
@@ -620,13 +653,14 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 UID_record = [] # Prevent the same UID from appearing in the screen, so record it
                 for i, bbox_cls in enumerate(BBOXs): # unmatch BBOX -> draw estimated (Xr, Yr) in Radar image
                     # if i in u_BBOXs_idx_list:
-                    bg_UID, uid_bbox = bbox_cls.drawUIDInRadar(bg_UID) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                    bg_UID, bbox_uid, uid_trace = bbox_cls.drawUIDInRadar(bg_UID, uid_trace) # draw unmatch_BBOX estimated (Xr, Yr) in radar plane image.
+                    if bbox_uid != None:
+                        UID_record.append(bbox_uid)
 
-                    if uid_bbox != None:
-                        UID_record.append(uid_bbox)
                 for i, mmw_cls in enumerate(MMWs): 
                     if i in u_MMWs_idx_list:
-                        bg_UID = mmw_cls.drawUID(bg_UID, UID_record) # draw matched BBOX_ID in radar plane image
+                        bg_UID, uid_trace = mmw_cls.drawUID(bg_UID, UID_record, uid_trace) # draw matched BBOX_ID in radar plane image
+
                 # cv2.imshow("bg_UID", bg_UID)
 
 
@@ -642,9 +676,9 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 # im_original = hconcat_resize([original_MMW_bg, img_white, frame])
                 # out_original.write(im_original)
 
-                # im_centroid = hconcat_resize([original_MMW_bg, img_white, online_im])
-                # cv2.imshow("im_centroid", im_centroid)
-                # out_centroid.write(im_centroid)
+                im_centroid = hconcat_resize([original_MMW_bg, img_white, online_im])
+                cv2.imshow("im_centroid", im_centroid)
+                out_centroid.write(im_centroid)
 
 
                 img_white = 255*np.ones((480, 20, 3), np.uint8)

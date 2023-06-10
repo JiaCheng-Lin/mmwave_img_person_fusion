@@ -87,9 +87,11 @@ class BBOX(object):
         
         return img
 
-    def drawUIDInRadar(self, bg_img, pt_size=3, unmatch_color=(0, 143, 255), match_pt_color=(232, 229, 26)):
+    def drawUIDInRadar(self, bg_img, uid_trace, pt_size=5, unmatch_color=(0, 143, 255), match_pt_color=(232, 229, 26)):
         
         if self.UID: # not None
+            # bg_img  = uid_trace.draw(bg_img, self.UID) # draw trace pt
+
             if self.MMW_ID != None and self.ID != None :
                 pt_color = match_pt_color
                 pt = self.matched_MMW.bg_pt
@@ -100,8 +102,11 @@ class BBOX(object):
             cv2.circle(bg_img, pt, pt_size, pt_color, -1)  # draw bg_pt point
             info = str(self.UID) + " " + str(self.MMW_ID) + " " + str(self.ID) 
             cv2.putText(bg_img, info, (pt[0]+5, pt[1]+5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.6, (84, 153, 34), 1, cv2.LINE_AA)
-        
-        return bg_img, self.UID
+            
+           
+            uid_trace.addTrace(self.UID, pt) # add pt to trace
+
+        return bg_img, self.UID, uid_trace
 
     def drawBBOXInCamera(self, img, unmatch_color=(0, 143, 255), match_color=(232, 229, 26)):
         if self.UID: # not None

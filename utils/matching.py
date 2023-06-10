@@ -15,6 +15,21 @@ def cal_BBOX_MMW_error(MMW, BBOX):
 
     return pixel_error, meter_error
 
+def cal_BBOX_MMW_error_reg(MMW, BBOX):
+    center_pt, estimated_center_pt = np.array((BBOX.center_x, BBOX.center_y)), np.array((MMW.reg_Xc, MMW.reg_Yc))
+
+    pixel_error = np.linalg.norm(center_pt-estimated_center_pt) # bbox - mmw
+
+    return pixel_error
+
+def cal_BBOX_MMW_error_T(MMW, BBOX):
+    center_pt, estimated_center_pt = np.array((BBOX.center_x, BBOX.center_y)), np.array((MMW.T_Xc, MMW.T_Yc))
+
+    pixel_error = np.linalg.norm(center_pt-estimated_center_pt) # bbox - mmw
+
+    return pixel_error
+
+
 # check if the estimated/projected MMW point(Xc, Yc) is in the bbox
 def checkWithinBbox(MMW, BBOX):
     if BBOX.Xmin <= MMW.Xc <= BBOX.Xmax and BBOX.Ymin <= MMW.Yc <= BBOX.Ymax:
@@ -48,7 +63,7 @@ def sameDir(MMW_dir, BBOX_dir):
     return True # have not dir / dir_dot>=0 (degree<=90)
 
 def CalErrorMatrix(MMWs, BBOXs, error_threshold=150, \
-                   pixel_weight=1, meter_weight=100):
+                   pixel_weight=1, meter_weight=200): #250
     unmatch_value = 1e6 
     error_mtx = [] # m x n
     
